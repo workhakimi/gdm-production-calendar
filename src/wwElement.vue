@@ -576,7 +576,12 @@ export default {
     // ─── ALLOCATION ENGINE ───
     function allocateJobs(jobs, extra) {
       const am = {}, ed = {};
-      const sorted = [...jobs]; // preserve array order = booking priority (first-booked first-served)
+      // Sort by created_at for stable priority (first-booked first-served), fallback to id
+      const sorted = [...jobs].sort((a, b) => {
+        const ca = a.created_at || '', cb = b.created_at || '';
+        if (ca !== cb) return ca.localeCompare(cb);
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
       if (extra) sorted.push(extra);
       for (const job of sorted) {
         if (!job.startDate || !job.quantity || job.quantity <= 0) continue;
@@ -775,7 +780,14 @@ export default {
       }
       const segs = []; let si = 0;
       const wk = {};
-      const ids = [...jobSet.keys()].sort((a, b) => a === '__draft__' ? 1 : b === '__draft__' ? -1 : 0);
+      const ids = [...jobSet.keys()].sort((a, b) => {
+        if (a === '__draft__') return 1; if (b === '__draft__') return -1;
+        const ja = resolvedJobs.value.find(j => j.id === a);
+        const jb = resolvedJobs.value.find(j => j.id === b);
+        const ca = ja?.created_at || '', cb = jb?.created_at || '';
+        if (ca !== cb) return ca.localeCompare(cb);
+        return String(a).localeCompare(String(b));
+      });
       for (const jid of ids) {
         const ji = jobSet.get(jid);
         // Build set of day indices that have allocation for this job
