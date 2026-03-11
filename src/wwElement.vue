@@ -89,7 +89,7 @@
           <template v-else>
             <!-- ── TIMELINE ── -->
             <div class="tl-track">
-              <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex >= i, 'tl-step--active': jobStageIndex === i }">
+              <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex > i, 'tl-step--active': jobStageIndex === i }">
                 <div class="tl-bar">
                   <div class="tl-dot"></div>
                   <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
@@ -1104,7 +1104,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-resize--right { right: 0; &::after { right: 2px; } }
 
 // ─── BOTTOM PANEL ───
-.cal-panel { background: $white; border-top: 2px solid $gray-200; min-height: 120px; max-height: 400px; display: flex; flex-direction: column; }
+.cal-panel { background: $white; border-top: 2px solid $gray-200; min-height: 120px; display: flex; flex-direction: column; overflow: visible; }
 .cal-tab-bar { display: flex; gap: 0; border-bottom: 2px solid $gray-200; background: $gray-50; flex-shrink: 0; }
 .cal-tab {
   padding: 8px 16px; font-size: 11px; font-weight: 600; font-family: inherit; color: $gray-500;
@@ -1112,8 +1112,8 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   transition: color 0.12s, border-color 0.12s; &:hover { color: $gray-700; }
 }
 .cal-tab--active { color: var(--cal-accent); border-bottom-color: var(--cal-accent); }
-.cal-tab-body { flex: 1; overflow-y: auto; }
-.cal-tab-content { padding: 12px 16px; }
+.cal-tab-body { flex: 1; overflow: visible; }
+.cal-tab-content { padding: 12px 16px; overflow: visible; }
 .cal-empty-tab { padding: 20px; text-align: center; color: $gray-400; font-size: 11px; border: 1px dashed $gray-300; border-radius: 4px; }
 
 // ─── TIMELINE ───
