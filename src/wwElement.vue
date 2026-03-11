@@ -94,7 +94,7 @@
                   <div class="tl-dot"></div>
                   <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
                 </div>
-                <span class="tl-label">{{ jobStageIndex >= i ? step.done : step.pending }}</span>
+                <span class="tl-label">{{ jobStageIndex > i ? step.done : step.pending }}</span>
               </div>
             </div>
 
