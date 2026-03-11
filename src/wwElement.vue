@@ -1122,7 +1122,7 @@ export default {
       for (let i = 0; i < numWeeks.value; i++) {
         const jobRows = wc[i] || 0;
         const h = Math.max(80, 28 + jobRows * 22);
-        rows.push(`${h}px`);
+        rows.push(`minmax(${h}px, 1fr)`);
       }
       return rows.join(' ');
     });
