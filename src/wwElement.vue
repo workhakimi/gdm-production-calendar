@@ -92,7 +92,7 @@
               <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex >= i, 'tl-step--active': jobStageIndex === i }">
                 <div class="tl-dot"></div>
                 <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
-                <span class="tl-label">{{ step.label }}</span>
+                <span class="tl-label">{{ jobStageIndex >= i ? step.done : step.pending }}</span>
               </div>
             </div>
 
@@ -106,13 +106,18 @@
                     <div class="bd-select-wrapper bd-select-wrapper--inline">
                       <input class="edit-input" v-model="stageBdSearch" placeholder="Search BD#..." @focus="stageBdOpen = true" @blur="closeStageBdDropdown" />
                       <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown">
-                        <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="submitStageBd(opt)">
+                        <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="selectStageBd(opt)">
                           <span class="bd-opt-num">{{ opt.bd_number }}</span>
                           <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
                           <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                         </div>
                       </div>
                     </div>
+                    <span v-if="stageBdSelected" class="bd-selected-tag">
+                      {{ stageBdSelected.bd_number }}
+                      <button class="bd-clear-btn" @click="clearStageBd">×</button>
+                    </span>
+                    <button class="btn-action btn-action--primary" :disabled="!stageBdSelected" @click="submitStageBd">Connect BD</button>
                   </div>
                 </div>
               </template>
@@ -120,10 +125,13 @@
               <!-- Stage 2: Arrival — date input -->
               <template v-if="jobStageIndex === 2">
                 <div class="stage-action">
-                  <span class="stage-prompt">Set arrival date</span>
+                  <span class="stage-prompt">Set the stock arrival date</span>
                   <div class="stage-row">
-                    <input type="date" class="edit-input" v-model="stageArrivalDate" />
-                    <button class="btn-action btn-action--primary" :disabled="!stageArrivalDate" @click="submitArrival">Submit</button>
+                    <div class="edit-field edit-field--compact">
+                      <span class="edit-label">Arrival Date</span>
+                      <input type="date" class="edit-input" v-model="stageArrivalDate" />
+                    </div>
+                    <button class="btn-action btn-action--primary" :disabled="!stageArrivalDate" @click="submitArrival">Set Arrival</button>
                   </div>
                 </div>
               </template>
@@ -175,7 +183,7 @@
                       <span class="edit-label">Checkout Date</span>
                       <input type="date" class="edit-input" v-model="stageCheckoutDate" />
                     </div>
-                    <button class="btn-action btn-action--primary" :disabled="!stageCheckoutDate" @click="submitCheckout">Submit Checkout</button>
+                    <button class="btn-action btn-action--primary" :disabled="!stageCheckoutDate" @click="submitCheckout">Set Checkout</button>
                   </div>
                 </div>
               </template>
@@ -184,37 +192,50 @@
             <!-- ── JOB DETAILS (view / edit) ── -->
             <div class="section-heading detail-heading">
               Job Details
-              <button v-if="!editMode" class="btn-action btn-action--muted btn-sm" @click="enterEditMode">Edit</button>
-              <template v-else>
-                <button class="btn-action btn-action--muted btn-sm" @click="cancelEditMode">Cancel</button>
-                <button class="btn-action btn-action--primary btn-sm" @click="saveEditMode">Save</button>
-              </template>
+              <div class="detail-heading-actions">
+                <template v-if="!editMode">
+                  <button class="btn-action btn-action--muted btn-sm" @click="enterEditMode">Edit</button>
+                  <button class="btn-action btn-action--danger btn-sm" @click="emitJobDelete">Delete</button>
+                </template>
+                <template v-else>
+                  <button class="btn-action btn-action--muted btn-sm" @click="cancelEditMode">Cancel</button>
+                  <button class="btn-action btn-action--primary btn-sm" @click="saveEditMode">Save</button>
+                </template>
+              </div>
             </div>
 
             <!-- View mode -->
-            <div v-if="!editMode" class="cal-detail-grid">
-              <div class="edit-field"><span class="edit-label">Title</span><span class="edit-value">{{ selectedJobData.title }}</span></div>
-              <div class="edit-field"><span class="edit-label">Type</span><span class="edit-value type-tag" :class="'type-tag--' + selectedJobData.type">{{ selectedJobData.type === 'uv' ? 'UV' : 'Laser' }}</span></div>
-              <div class="edit-field"><span class="edit-label">Quantity</span><span class="edit-value">{{ selectedJobData.quantity }}</span></div>
-              <div class="edit-field"><span class="edit-label">Start Date</span><span class="edit-value">{{ fmtDate(selectedJobData.startDate) }}</span></div>
-              <div class="edit-field"><span class="edit-label">End Date</span><span class="edit-value">{{ fmtDate(selectedJobData.endDate) }}</span></div>
-              <div class="edit-field"><span class="edit-label">BD Number</span><span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span></div>
-              <div class="edit-field"><span class="edit-label">PIC</span><span class="edit-value">{{ getTeammateName(selectedJobData.pic_id) || '–' }}</span></div>
-              <div class="edit-field"><span class="edit-label">Created</span><span class="edit-value">{{ fmtDate(selectedJobData.created_at) || '–' }}</span></div>
+            <div v-if="!editMode" class="cal-detail-table">
+              <div class="detail-row">
+                <div class="detail-cell"><span class="edit-label">Title</span><span class="edit-value">{{ selectedJobData.title }}</span></div>
+                <div class="detail-cell"><span class="edit-label">Type</span><span class="edit-value type-tag" :class="'type-tag--' + selectedJobData.type">{{ selectedJobData.type === 'uv' ? 'UV' : 'Laser' }}</span></div>
+                <div class="detail-cell"><span class="edit-label">Quantity</span><span class="edit-value">{{ selectedJobData.quantity }}</span></div>
+                <div class="detail-cell"><span class="edit-label">PIC</span><span class="edit-value">{{ getTeammateName(selectedJobData.pic_id) || '–' }}</span></div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-cell"><span class="edit-label">Start Date</span><span class="edit-value">{{ fmtDate(selectedJobData.startDate) }}</span></div>
+                <div class="detail-cell"><span class="edit-label">End Date</span><span class="edit-value">{{ fmtDate(selectedJobData.endDate) }}</span></div>
+                <div class="detail-cell"><span class="edit-label">BD Number</span><span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span></div>
+                <div class="detail-cell"><span class="edit-label">Created</span><span class="edit-value">{{ fmtDate(selectedJobData.created_at) || '–' }}</span></div>
+              </div>
             </div>
 
             <!-- Edit mode -->
-            <div v-else class="cal-detail-grid">
-              <div class="edit-field"><label class="edit-label">Title</label><input class="edit-input" v-model="editForm.title" /></div>
-              <div class="edit-field">
-                <label class="edit-label">Type</label>
-                <select class="edit-select" v-model="editForm.type"><option value="uv">UV</option><option value="laser">Laser</option></select>
+            <div v-else class="cal-detail-table">
+              <div class="detail-row">
+                <div class="detail-cell"><label class="edit-label">Title</label><input class="edit-input" v-model="editForm.title" /></div>
+                <div class="detail-cell">
+                  <label class="edit-label">Type</label>
+                  <select class="edit-select" v-model="editForm.type"><option value="uv">UV</option><option value="laser">Laser</option></select>
+                </div>
+                <div class="detail-cell"><label class="edit-label">Quantity</label><input class="edit-input" type="number" v-model.number="editForm.quantity" min="1" /></div>
               </div>
-              <div class="edit-field"><label class="edit-label">Quantity</label><input class="edit-input" type="number" v-model.number="editForm.quantity" min="1" /></div>
-              <div class="edit-field"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
-              <div class="edit-field"><label class="edit-label">End Date</label><input class="edit-input" type="date" v-model="editForm.endDate" /></div>
-              <div class="edit-field"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
-              <div class="edit-field"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
+              <div class="detail-row">
+                <div class="detail-cell"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
+                <div class="detail-cell"><label class="edit-label">End Date</label><input class="edit-input" type="date" v-model="editForm.endDate" /></div>
+                <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
+                <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
+              </div>
             </div>
 
             <!-- BD Batch Details -->
@@ -247,9 +268,6 @@
               </div>
             </template>
 
-            <div class="cal-detail-actions">
-              <button class="btn-action btn-action--danger" @click="emitJobDelete">Delete Job</button>
-            </div>
           </template>
         </div>
 
@@ -403,12 +421,12 @@ const TABS = [
   { key: 'capacity', label: 'Manage Capacity' },
 ];
 const STAGES = [
-  { key: 'created', label: 'Created' },
-  { key: 'connected', label: 'Connected' },
-  { key: 'arrived', label: 'Arrived' },
-  { key: 'started', label: 'Started' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'checkout', label: 'Checked Out' },
+  { key: 'created', done: 'Created', pending: 'Created' },
+  { key: 'connected', done: 'Connected', pending: 'Pending Connection' },
+  { key: 'arrived', done: 'Arrived', pending: 'Pending Arrival' },
+  { key: 'started', done: 'Started', pending: 'Pending Start' },
+  { key: 'completed', done: 'Completed', pending: 'Pending Completion' },
+  { key: 'checkout', done: 'Checked Out', pending: 'Pending Checkout' },
 ];
 
 function parseDate(str) {
@@ -650,18 +668,27 @@ export default {
     // ─── STAGE BD SEARCH (manage tab, stage 1) ───
     const stageBdSearch = ref('');
     const stageBdOpen = ref(false);
+    const stageBdSelected = ref(null);
     const filteredStageBdOptions = computed(() => {
       const q = stageBdSearch.value.toLowerCase().trim();
       return q ? bdOptions.value.filter(o => o.bd_number.toLowerCase().includes(q) || o.opid.toLowerCase().includes(q)) : bdOptions.value;
     });
     function closeStageBdDropdown() { setTimeout(() => { stageBdOpen.value = false; }, 150); }
-    function submitStageBd(opt) {
+    function selectStageBd(opt) {
+      stageBdSelected.value = opt;
+      stageBdSearch.value = opt.bd_number;
       stageBdOpen.value = false;
-      stageBdSearch.value = '';
+    }
+    function clearStageBd() { stageBdSelected.value = null; stageBdSearch.value = ''; }
+    function submitStageBd() {
+      const opt = stageBdSelected.value;
+      if (!opt) return;
       emit('trigger-event', {
         name: 'onJobConnectBd',
         event: { value: { jobId: selectedJobId.value, bd_number: opt.bd_number, batch_key: opt.batch_key, line_ids: opt.line_ids } },
       });
+      stageBdSelected.value = null;
+      stageBdSearch.value = '';
     }
 
     // ─── STAGE ACTIONS ───
@@ -1005,7 +1032,7 @@ export default {
       isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
       bdSearch, bdDropdownOpen, filteredBdOptions, draftBdBatch, selectBdNumber, clearDraftBd, closeBdDropdown,
       picSearch, picDropdownOpen, filteredPicOptions, selectPic, clearDraftPic, closePicDropdown,
-      stageBdSearch, stageBdOpen, filteredStageBdOptions, closeStageBdDropdown, submitStageBd,
+      stageBdSearch, stageBdOpen, stageBdSelected, filteredStageBdOptions, closeStageBdDropdown, selectStageBd, clearStageBd, submitStageBd,
       stageArrivalDate, stageCompleteDate, stageCheckoutDate,
       submitArrival, submitComplete, submitCheckout,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
@@ -1103,7 +1130,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── TIMELINE ───
 .tl-track {
-  display: flex; align-items: flex-start; gap: 0; margin-bottom: 12px; padding: 8px 0 4px;
+  display: flex; align-items: flex-start; gap: 0; margin-bottom: 20px; padding: 8px 0 4px;
 }
 .tl-step {
   display: flex; align-items: center; flex-direction: column; position: relative; flex: 1; min-width: 0;
@@ -1139,7 +1166,9 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── FORMS ───
 .cal-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.cal-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.cal-detail-table { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.detail-row { display: flex; gap: 12px; }
+.detail-cell { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .edit-field { display: flex; flex-direction: column; gap: 2px; }
 .edit-field--wide { grid-column: 1 / -1; }
 .edit-field--compact { min-width: 120px; }
@@ -1189,7 +1218,8 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-400; margin: 12px 0 6px;
   display: flex; align-items: center; gap: 6px;
 }
-.detail-heading { margin-top: 0; }
+.detail-heading { margin-top: 0; justify-content: space-between; }
+.detail-heading-actions { display: flex; gap: 4px; margin-left: auto; }
 .cap-list-heading { margin-top: 16px; }
 
 // ─── BD DROPDOWN ───
@@ -1243,7 +1273,6 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-milestone-row { display: flex; align-items: center; gap: 8px; }
 .milestone-label { min-width: 110px; }
 .milestone-pending { color: $amber; font-style: italic; font-size: 11px; }
-.cal-detail-actions { margin-top: 12px; display: flex; gap: 8px; }
 
 // ─── CAPACITY LIST ───
 .cal-cap-list { display: flex; flex-direction: column; gap: 3px; }
