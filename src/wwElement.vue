@@ -50,29 +50,31 @@
         </div>
       </div>
 
-      <!-- Job bars (direct grid children, explicitly placed) -->
-      <div
-        v-for="seg in allSegments"
-        :key="seg.key"
-        class="cal-job-bar"
-        :class="{
-          'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
-          'cal-job--draft': seg.isDraft && !seg.isGap,
-          'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
-          'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
-            || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
-          'cal-job--gap': seg.isGap,
-          'cal-job--delay': seg.isDelay,
-        }"
-        :style="segmentStyle(seg)"
-        @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
-        @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
-      >
-        <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-        <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
-        <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
-        <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
-        <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
+      <!-- Job bars overlay -->
+      <div class="cal-jobs-layer">
+        <div
+          v-for="seg in allSegments"
+          :key="seg.key"
+          class="cal-job-bar"
+          :class="{
+            'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
+            'cal-job--draft': seg.isDraft && !seg.isGap,
+            'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
+            'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
+              || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
+            'cal-job--gap': seg.isGap,
+            'cal-job--delay': seg.isDelay,
+          }"
+          :style="segmentStyle(seg)"
+          @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
+          @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
+        >
+          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
+          <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
+          <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
+          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+          <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
+        </div>
       </div>
     </div>
 
@@ -1113,30 +1115,43 @@ export default {
       return counts;
     });
     const numWeeks = computed(() => Math.max(1, Math.ceil(calendarDays.value.length / 7)));
-    // Each week row: 24px header + (rows * 22px) + 4px padding, min 80px
-    const gridRowHeights = computed(() => {
+    // Pixel heights per week row
+    const weekRowPx = computed(() => {
       const wc = weekRowCounts.value;
       const rows = [];
       for (let i = 0; i < numWeeks.value; i++) {
         const jobRows = wc[i] || 0;
-        const h = Math.max(80, 28 + jobRows * 22);
-        rows.push(`${h}px`);
+        rows.push(Math.max(80, 28 + jobRows * 22));
       }
-      return rows.join(' ');
+      return rows;
     });
+    const totalGridHeight = computed(() => weekRowPx.value.reduce((s, h) => s + h, 0));
+    // Cumulative top offsets in px for each week row
+    const weekRowTops = computed(() => {
+      const tops = [0];
+      for (let i = 0; i < weekRowPx.value.length - 1; i++) {
+        tops.push(tops[i] + weekRowPx.value[i]);
+      }
+      return tops;
+    });
+    const gridRowHeights = computed(() => weekRowPx.value.map(h => `${h}px`).join(' '));
     const gridStyle = computed(() => ({
       gridTemplateRows: gridRowHeights.value,
     }));
     function segmentStyle(seg) {
       const bg = seg.isGap ? '#e5e7eb' : seg.color;
+      const total = totalGridHeight.value || 1;
+      const rowTop = weekRowTops.value[seg.weekIndex] || 0;
+      const topPx = rowTop + 24 + seg.rowIndex * 22;
+      const colW = 100 / 7;
       return {
-        gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
-        alignSelf: 'start',
-        marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px',
+        position: 'absolute',
+        left: `${seg.startCol * colW}%`,
+        width: `${(seg.endCol - seg.startCol + 1) * colW}%`,
+        top: `${(topPx / total) * 100}%`,
+        height: '20px',
         backgroundColor: bg,
         borderRadius: `${seg.isFirst ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isFirst ? '3px' : '0'}`,
-        zIndex: seg.isGap ? 2 : 3,
-        pointerEvents: seg.isGap ? 'none' : 'all',
       };
     }
 
@@ -1541,10 +1556,12 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); background: $white; min-width: 700px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; min-width: 700px; }
+.cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
-  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); cursor: default;
+  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
+  &:nth-child(7n) { border-right: none; }
 }
 .cal-day--outside { opacity: 0.3; pointer-events: none; }
 .cal-day--weekend { background: var(--cal-weekend-bg, $gray-50); }
@@ -1561,10 +1578,11 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-cap-override-tag { font-size: 7px; font-weight: 600; color: $amber; background: $amber-50; padding: 0 3px; border-radius: 2px; margin-right: 2px; }
 
 // ─── JOB BARS ───
+.cal-jobs-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 2; }
 .cal-job-bar {
   display: flex; align-items: center; padding: 0 5px; font-size: 9px; font-weight: 600; color: $white;
-  cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  transition: opacity 0.15s, filter 0.15s; min-width: 0;
+  pointer-events: all; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: opacity 0.15s, filter 0.15s; position: relative; z-index: 3; min-width: 0;
   &:hover { filter: brightness(1.1); z-index: 10; }
 }
 .cal-job--selected { outline: 2px solid $gray-900; outline-offset: -1px; z-index: 8; }
