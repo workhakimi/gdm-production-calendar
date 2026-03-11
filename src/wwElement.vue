@@ -59,7 +59,8 @@
           :class="{
             'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft && !seg.isGap,
-            'cal-job--faded': (isDrafting || isRescheduling || editMode) && !seg.isDraft,
+            'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
+              || (editMode && !editStartDateChanged && !seg.isGap && seg.jobId !== selectedJobId),
             'cal-job--gap': seg.isGap,
           }"
           :style="segmentStyle(seg)"
