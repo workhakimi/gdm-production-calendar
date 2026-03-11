@@ -60,8 +60,8 @@
             'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft && !seg.isGap,
             'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
-            'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
-              || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
+            'cal-job--faded': (isDrafting || isRescheduling || (editMode && editLosesPriority)) && !seg.isDraft
+              || (editMode && !editLosesPriority && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
             'cal-job--gap': seg.isGap,
             'cal-job--delay': seg.isDelay,
           }"
@@ -328,7 +328,7 @@
                 <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
               </div>
               <div class="edit-drag-hint">Drag the job bar on the calendar to change start date.</div>
-              <div v-if="editStartDateChanged" class="edit-warn-msg">Changing the start date will update the booking creation timestamp, causing you to lose your current booking priority.</div>
+              <div v-if="editLosesPriority" class="edit-warn-msg">Changing the start date or type will update the booking creation timestamp, causing you to lose your current booking priority.</div>
             </div>
 
             <!-- BD disconnected warning -->
@@ -718,8 +718,8 @@ export default {
       if (isRescheduling.value && rescheduleJob.startDate && rescheduleJob.quantity > 0) {
         return { id: '__draft__', title: rescheduleJob.title || 'Reschedule', type: rescheduleJob.type, quantity: rescheduleJob.quantity, startDate: rescheduleJob.startDate, _maxDays: rescheduleJob._maxDays };
       }
-      // Only show edit preview when start date has changed (loses priority)
-      if (editMode.value && editStartDateChanged.value && editForm.startDate && editForm.quantity > 0) {
+      // Show edit preview when priority is lost (start date or type changed)
+      if (editMode.value && editLosesPriority.value && editForm.startDate && editForm.quantity > 0) {
         return { id: '__draft__', title: editForm.title || 'Edit', type: editForm.type, quantity: editForm.quantity, startDate: editForm.startDate, _maxDays: editForm._maxDays };
       }
       return null;
@@ -730,7 +730,7 @@ export default {
       if (isRescheduling.value && selectedJobId.value) {
         return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
       }
-      if (editMode.value && editStartDateChanged.value && selectedJobId.value) {
+      if (editMode.value && editLosesPriority.value && selectedJobId.value) {
         return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
       }
       return resolvedJobs.value;
@@ -748,7 +748,7 @@ export default {
     const editPreviewEndDate = computed(() => {
       if (!editMode.value) return '';
       // If start date changed, use the __draft__ preview from full allocation
-      if (editStartDateChanged.value) return draftEndDateRaw.value;
+      if (editLosesPriority.value) return draftEndDateRaw.value;
       // If quantity or type changed (but not start date), compute expected end date in-place
       const j = selectedJobData.value;
       if (!j) return '';
@@ -1313,6 +1313,11 @@ export default {
       const j = selectedJobData.value;
       return editMode.value && j && editForm.startDate !== (j.startDate || '');
     });
+    const editTypeChanged = computed(() => {
+      const j = selectedJobData.value;
+      return editMode.value && j && editForm.type !== (j.type || 'uv');
+    });
+    const editLosesPriority = computed(() => editStartDateChanged.value || editTypeChanged.value);
     function cancelEditMode() { editMode.value = false; }
     function saveEditMode() {
       const j = selectedJobData.value;
@@ -1534,7 +1539,7 @@ export default {
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
-      editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
+      editMode, editForm, editStartDateChanged, editTypeChanged, editLosesPriority, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
       isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
