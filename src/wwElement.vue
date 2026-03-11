@@ -37,10 +37,10 @@
           <span class="cal-day-num">{{ day.dayNum }}</span>
           <span v-if="day.dayNum === 1 || day.idx === 0" class="cal-day-month">{{ day.monthShort }}</span>
           <span v-if="!day.isWeekend || hasWeekendCapacity(day.dateStr)" class="cal-cap-badges">
-            <span class="cal-cap-badge cal-cap--uv" :class="{ 'cal-cap--over': uvUsed(day) > uvTotal(day) }">
+            <span class="cal-cap-badge cal-cap--uv" :class="{ 'cal-cap--over': uvUsed(day) > uvTotal(day), 'cal-cap--full': uvUsed(day) === uvTotal(day) && uvTotal(day) > 0 }">
               UV {{ uvUsed(day) }}/{{ uvTotal(day) }}
             </span>
-            <span class="cal-cap-badge cal-cap--laser" :class="{ 'cal-cap--over': laserUsed(day) > laserTotal(day) }">
+            <span class="cal-cap-badge cal-cap--laser" :class="{ 'cal-cap--over': laserUsed(day) > laserTotal(day), 'cal-cap--full': laserUsed(day) === laserTotal(day) && laserTotal(day) > 0 }">
               L {{ laserUsed(day) }}/{{ laserTotal(day) }}
             </span>
           </span>
@@ -1664,7 +1664,9 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-cap-badge { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; white-space: nowrap; }
 .cal-cap--uv { color: var(--cal-uv-color); background: $blue-50; }
 .cal-cap--laser { color: var(--cal-laser-color); background: $purple-50; }
-.cal-cap--over { color: $red; background: $red-50; }
+.cal-cap--full.cal-cap--uv { color: #fff; background: var(--cal-uv-color); }
+.cal-cap--full.cal-cap--laser { color: #fff; background: var(--cal-laser-color); }
+.cal-cap--over { color: #fff; background: $red; }
 .cal-cap-overrides { padding: 1px 4px; }
 .cal-cap-override-tag { font-size: 7px; font-weight: 600; color: $amber; background: $amber-50; padding: 0 3px; border-radius: 2px; margin-right: 2px; }
 
