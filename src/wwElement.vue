@@ -110,6 +110,7 @@
                   <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': stageStates[i] === 'done' || stageStates[i] === 'warn' }"></div>
                 </div>
                 <span class="tl-label">{{ stageLabels[i] }}</span>
+                <span v-if="stageDates[i]" class="tl-date">{{ stageDates[i] }}</span>
               </div>
             </div>
 
@@ -967,6 +968,21 @@ export default {
       });
     });
 
+    // Date value to show under each timeline step
+    const stageDates = computed(() => {
+      const j = selectedJobData.value;
+      if (!j) return STAGES.map(() => '');
+      return STAGES.map((step) => {
+        if (step.key === 'created') return fmtDate(j.created_at) || '';
+        if (step.key === 'connected') return j.bd_number || '';
+        if (step.key === 'arrived') return fmtDate(j.arrival_date) || '';
+        if (step.key === 'started') return fmtDate(j.startDate) || '';
+        if (step.key === 'completed') return fmtDate(j.completed_at) || fmtDate(j.endDate) || '';
+        if (step.key === 'checkout') return fmtDate(j.checkout_date) || '';
+        return '';
+      });
+    });
+
     // Selected timeline step (for editing milestones out of order)
     const selectedStageIdx = ref(null); // null = follow current stage
     const activeStageIdx = computed(() => selectedStageIdx.value !== null ? selectedStageIdx.value : jobStageIndex.value);
@@ -1209,7 +1225,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
@@ -1342,6 +1358,10 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .tl-label {
   font-size: 8px; font-weight: 600; color: $gray-400; margin-top: 3px;
   text-transform: uppercase; letter-spacing: 0.03em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.tl-date {
+  font-size: 9px; font-weight: 700; color: $gray-700; margin-top: 1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .tl-step { cursor: pointer; &:hover .tl-dot { transform: scale(1.2); } }
