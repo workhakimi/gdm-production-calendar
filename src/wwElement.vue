@@ -723,13 +723,6 @@ export default {
     function submitReschedule() {
       if (!rescheduleJob.startDate) return;
       const endDate = draftEndDateRaw.value;
-      const dailyAllocation = [];
-      const am = allAllocations.value;
-      for (const ds in am) {
-        const a = (am[ds] || []).find(x => x.jobId === '__draft__');
-        if (a) dailyAllocation.push({ date: ds, quantity: a.qty });
-      }
-      dailyAllocation.sort((a, b) => a.date.localeCompare(b.date));
       const j = selectedJobData.value;
       emit('trigger-event', {
         name: 'onJobUpdate',
@@ -739,7 +732,8 @@ export default {
           startDate: rescheduleJob.startDate, endDate,
           bd_number: j?.bd_number || '', pic_id: j?.pic_id || '',
           arrival_date: j?.arrival_date || '', completed_at: j?.completed_at || '',
-          checkout_date: j?.checkout_date || '', dailyAllocation,
+          checkout_date: j?.checkout_date || '',
+          dailyAllocation: buildDailyAllocation(),
         } },
       });
       isRescheduling.value = false;
@@ -880,6 +874,12 @@ export default {
       return editMode.value && j && editForm.startDate !== (j.startDate || '');
     });
     function cancelEditMode() { editMode.value = false; }
+    function buildDailyAllocation() {
+      const da = [], am = allAllocations.value;
+      for (const ds in am) { const a = (am[ds] || []).find(x => x.jobId === '__draft__'); if (a) da.push({ date: ds, quantity: a.qty }); }
+      da.sort((a, b) => a.date.localeCompare(b.date));
+      return da;
+    }
     function saveEditMode() {
       const j = selectedJobData.value;
       if (!j) return;
@@ -892,6 +892,7 @@ export default {
           bd_number: j.bd_number || '', pic_id: j.pic_id || '',
           arrival_date: editForm.arrival_date, completed_at: j.completed_at || '',
           checkout_date: editForm.checkout_date,
+          dailyAllocation: buildDailyAllocation(),
         } },
       });
       editMode.value = false;
@@ -917,13 +918,9 @@ export default {
     function submitDraft() {
       if (!canSubmitDraft.value) return;
       const endDate = draftEndDateRaw.value;
-      const da = [];
-      const am = allAllocations.value;
-      for (const ds in am) { const a = (am[ds] || []).find(x => x.jobId === '__draft__'); if (a) da.push({ date: ds, quantity: a.qty }); }
-      da.sort((a, b) => a.date.localeCompare(b.date));
       emit('trigger-event', {
         name: 'onJobCreate',
-        event: { value: { title: draftJob.title, type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, endDate, dailyAllocation: da, bd_number: draftJob.bd_number || '', pic_id: draftJob.pic_id || '' } },
+        event: { value: { title: draftJob.title, type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, endDate, dailyAllocation: buildDailyAllocation(), bd_number: draftJob.bd_number || '', pic_id: draftJob.pic_id || '' } },
       });
       if (draftJob.bd_number) {
         const opt = bdOptions.value.find(o => o.bd_number === draftJob.bd_number);
