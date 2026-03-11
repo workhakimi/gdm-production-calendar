@@ -730,9 +730,17 @@ export default {
         if (a) dailyAllocation.push({ date: ds, quantity: a.qty });
       }
       dailyAllocation.sort((a, b) => a.date.localeCompare(b.date));
+      const j = selectedJobData.value;
       emit('trigger-event', {
         name: 'onJobUpdate',
-        event: { value: { jobId: selectedJobId.value, changes: { startDate: rescheduleJob.startDate, endDate, dailyAllocation } } },
+        event: { value: {
+          jobId: selectedJobId.value,
+          title: j?.title || '', type: j?.type || 'uv', quantity: Number(j?.quantity) || 0,
+          startDate: rescheduleJob.startDate, endDate,
+          bd_number: j?.bd_number || '', pic_id: j?.pic_id || '',
+          arrival_date: j?.arrival_date || '', completed_at: j?.completed_at || '',
+          checkout_date: j?.checkout_date || '', dailyAllocation,
+        } },
       });
       isRescheduling.value = false;
     }
@@ -873,18 +881,19 @@ export default {
     });
     function cancelEditMode() { editMode.value = false; }
     function saveEditMode() {
-      const changes = {};
       const j = selectedJobData.value;
-      if (editForm.title !== j.title) changes.title = editForm.title;
-      if (editForm.type !== j.type) changes.type = editForm.type;
-      if (editForm.quantity !== Number(j.quantity)) changes.quantity = editForm.quantity;
-      if (editForm.startDate !== (j.startDate || '')) changes.startDate = editForm.startDate;
-      if (editForm.endDate !== (j.endDate || '')) changes.endDate = editForm.endDate;
-      if (editForm.arrival_date !== (j.arrival_date || '')) changes.arrival_date = editForm.arrival_date;
-      if (editForm.checkout_date !== (j.checkout_date || '')) changes.checkout_date = editForm.checkout_date;
-      if (Object.keys(changes).length) {
-        emit('trigger-event', { name: 'onJobUpdate', event: { value: { jobId: selectedJobId.value, changes } } });
-      }
+      if (!j) return;
+      emit('trigger-event', {
+        name: 'onJobUpdate',
+        event: { value: {
+          jobId: selectedJobId.value,
+          title: editForm.title, type: editForm.type, quantity: editForm.quantity,
+          startDate: editForm.startDate, endDate: editForm.endDate,
+          bd_number: j.bd_number || '', pic_id: j.pic_id || '',
+          arrival_date: editForm.arrival_date, completed_at: j.completed_at || '',
+          checkout_date: editForm.checkout_date,
+        } },
+      });
       editMode.value = false;
     }
 

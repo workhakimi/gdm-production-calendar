@@ -25,7 +25,7 @@ export default {
     {
       name: 'onJobUpdate',
       label: { en: 'On job update' },
-      event: { value: { jobId: null, changes: {} } },
+      event: { value: { jobId: null, title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '', arrival_date: '', completed_at: '', checkout_date: '', dailyAllocation: [] } },
     },
     {
       name: 'onJobDelete',
