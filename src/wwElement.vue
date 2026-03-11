@@ -789,7 +789,7 @@ export default {
           for (const wi of weekKeys) {
             const sp = weekSpans[wi];
             if (!wk[wi]) wk[wi] = [];
-            if (wk[wi].some(r => r.ri === ri && !(sp.max < r.sc || sp.min > r.ec))) { found = false; break; }
+            if (wk[wi].some(r => r.ri === ri && !(sp.max < r.sc - 1 || sp.min > r.ec + 1))) { found = false; break; }
           }
           if (!found) ri++;
         }
