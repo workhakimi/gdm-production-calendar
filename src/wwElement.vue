@@ -612,15 +612,19 @@ export default {
       if (isRescheduling.value && rescheduleJob.startDate && rescheduleJob.quantity > 0) {
         return { id: '__draft__', title: rescheduleJob.title || 'Reschedule', type: rescheduleJob.type, quantity: rescheduleJob.quantity, startDate: rescheduleJob.startDate, _maxDays: rescheduleJob._maxDays };
       }
-      if (editMode.value && editForm.startDate && editForm.quantity > 0) {
+      // Only show edit preview when start date has changed (loses priority)
+      if (editMode.value && editStartDateChanged.value && editForm.startDate && editForm.quantity > 0) {
         return { id: '__draft__', title: editForm.title || 'Edit', type: editForm.type, quantity: editForm.quantity, startDate: editForm.startDate, _maxDays: editForm._maxDays };
       }
       return null;
     });
 
-    // For reschedule or edit mode, exclude the original job from the base list
+    // For reschedule or edit mode with changed start date, exclude the original job from the base list
     const jobsForAllocation = computed(() => {
-      if ((isRescheduling.value || editMode.value) && selectedJobId.value) {
+      if (isRescheduling.value && selectedJobId.value) {
+        return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
+      }
+      if (editMode.value && editStartDateChanged.value && selectedJobId.value) {
         return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
       }
       return resolvedJobs.value;
