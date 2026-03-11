@@ -203,13 +203,7 @@
                     </div>
                     <!-- Delay end time controls (hidden when editing delay date) -->
                     <template v-if="!delayMode">
-                      <div v-if="delayEndDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
-                        <span class="stage-inline-label">Delay End Time</span>
-                        <span class="stage-inline-value">{{ selectedJobData.endDate_delay.split('T')[1] }}</span>
-                        <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
-                        <button class="btn-action btn-action--danger btn-sm" @click="removeDelayEndTime">Remove Time</button>
-                      </div>
-                      <div v-else-if="showDelayEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
+                      <div v-if="showDelayEndTimeInput" class="stage-inline" style="margin-top:4px">
                         <span class="stage-inline-label">Set Time</span>
                         <input type="time" class="edit-input edit-input--sm" v-model="delayEndTimeOnly" />
                         <button class="btn-action btn-action--primary btn-sm" :disabled="!delayEndTimeOnly" @click="setDelayEndTime">Set</button>
@@ -228,13 +222,7 @@
                     </div>
                     <!-- End time controls (hidden when delay form active) -->
                     <template v-if="!delayMode">
-                      <div v-if="endDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
-                        <span class="stage-inline-label">End Time</span>
-                        <span class="stage-inline-value">{{ selectedJobData.endDate.split('T')[1] }}</span>
-                        <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
-                        <button class="btn-action btn-action--danger btn-sm" @click="removeEndTime">Remove Time</button>
-                      </div>
-                      <div v-else-if="showEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
+                      <div v-if="showEndTimeInput" class="stage-inline" style="margin-top:4px">
                         <span class="stage-inline-label">Set Time</span>
                         <input type="time" class="edit-input edit-input--sm" v-model="endTimeOnly" />
                         <button class="btn-action btn-action--primary btn-sm" :disabled="!endTimeOnly" @click="setEndTime">Set</button>
