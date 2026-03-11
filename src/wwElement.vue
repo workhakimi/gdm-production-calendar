@@ -19,7 +19,7 @@
     </div>
 
     <!-- ─── CALENDAR GRID ─── -->
-    <div class="cal-grid" :class="{ 'cal-grid--dragging': dragState.active }" ref="gridRef">
+    <div class="cal-grid" :class="{ 'cal-grid--dragging': dragState.active }" :style="gridStyle" ref="gridRef">
       <div
         v-for="day in calendarDays"
         :key="day.dateStr"
@@ -745,7 +745,22 @@ export default {
     const draftEndDate = computed(() => { const e = fullResult.value.jobEndDates['__draft__']; return e ? fmtDate(e) : ''; });
     const draftEndDateRaw = computed(() => fullResult.value.jobEndDates['__draft__'] || '');
     const rescheduleEndDate = computed(() => draftEndDate.value);
-    const editPreviewEndDate = computed(() => editMode.value ? draftEndDateRaw.value : '');
+    const editPreviewEndDate = computed(() => {
+      if (!editMode.value) return '';
+      // If start date changed, use the __draft__ preview from full allocation
+      if (editStartDateChanged.value) return draftEndDateRaw.value;
+      // If quantity or type changed (but not start date), compute expected end date in-place
+      const j = selectedJobData.value;
+      if (!j) return '';
+      const qtyChanged = editForm.quantity !== Number(j.quantity);
+      const typeChanged = editForm.type !== (j.type || 'uv');
+      if (!qtyChanged && !typeChanged) return j.endDate ? j.endDate.split('T')[0] : '';
+      // Run allocation with the edited job swapped in
+      const edited = { ...j, quantity: editForm.quantity, type: editForm.type, id: j.id };
+      const others = resolvedJobs.value.filter(jj => jj.id !== j.id);
+      const result = allocateJobs(others, edited);
+      return result.jobEndDates[j.id] || '';
+    });
     const draftDaysRequired = computed(() => {
       if (!draftEndDateRaw.value || !draftJob.startDate) return '–';
       const s = parseDate(draftJob.startDate), e = parseDate(draftEndDateRaw.value);
@@ -1090,9 +1105,33 @@ export default {
       return segs;
     });
 
+    // Compute max job rows per week for dynamic row heights
+    const weekRowCounts = computed(() => {
+      const counts = {};
+      for (const seg of allSegments.value) {
+        const wi = seg.weekIndex;
+        counts[wi] = Math.max(counts[wi] || 0, seg.rowIndex + 1);
+      }
+      return counts;
+    });
+    const numWeeks = computed(() => Math.max(1, Math.ceil(calendarDays.value.length / 7)));
+    // Each week row: 24px header + (rows * 22px) + 4px padding, min 80px
+    const gridRowHeights = computed(() => {
+      const wc = weekRowCounts.value;
+      const rows = [];
+      for (let i = 0; i < numWeeks.value; i++) {
+        const jobRows = wc[i] || 0;
+        const h = Math.max(80, 28 + jobRows * 22);
+        rows.push(`${h}px`);
+      }
+      return rows.join(' ');
+    });
+    const gridStyle = computed(() => ({
+      gridTemplateRows: gridRowHeights.value,
+    }));
     const jobsLayerStyle = computed(() => ({
       display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-      gridTemplateRows: `repeat(${Math.max(1, Math.ceil(calendarDays.value.length / 7))}, 1fr)`,
+      gridTemplateRows: gridRowHeights.value,
     }));
     function segmentStyle(seg) {
       const bg = seg.isGap ? '#e5e7eb' : seg.color;
@@ -1248,9 +1287,13 @@ export default {
     function saveEditMode() {
       const j = selectedJobData.value;
       if (!j) return;
-      // Only use recomputed start/end if start date was manually changed
+      // Use recomputed end date if start date, quantity, or type changed
       const sd = editStartDateChanged.value ? (editForm.startDate || null) : (j.startDate || null);
-      const ed = editStartDateChanged.value ? (editPreviewEndDate.value || editForm.endDate || null) : (j.endDate || null);
+      const qtyChanged = editForm.quantity !== Number(j.quantity);
+      const typeChanged = editForm.type !== (j.type || 'uv');
+      const ed = (editStartDateChanged.value || qtyChanged || typeChanged)
+        ? (editPreviewEndDate.value || editForm.endDate || null)
+        : (j.endDate || null);
       emit('trigger-event', {
         name: 'onJobUpdate',
         event: { value: {
@@ -1437,7 +1480,7 @@ export default {
       currentMonth, currentYear, monthLabel, activeTab, selectedJobId, gridRef,
       calendarDays, resolvedCapacity, getCapacityOverrides, hasWeekendCapacity,
       uvUsed, uvTotal, laserUsed, laserTotal,
-      allAllocations, allSegments, segmentStyle, jobsLayerStyle,
+      allAllocations, allSegments, segmentStyle, gridStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
@@ -1503,7 +1546,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
-  min-height: 80px; border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
+  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
   &:nth-child(7n) { border-right: none; }
 }
 .cal-day--outside { opacity: 0.3; pointer-events: none; }
@@ -1768,7 +1811,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr; }
   .cal-cap-badge { font-size: 7px; }
   .cal-header { padding: 6px 8px; }
-  .cal-day-cell { min-height: 60px; }
+  .cal-day-cell { /* height controlled by gridStyle */ }
   .tl-label { font-size: 7px; }
 }
 </style>
