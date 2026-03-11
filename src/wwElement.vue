@@ -90,8 +90,10 @@
             <!-- ── TIMELINE ── -->
             <div class="tl-track">
               <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex >= i, 'tl-step--active': jobStageIndex === i }">
-                <div class="tl-dot"></div>
-                <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
+                <div class="tl-bar">
+                  <div class="tl-dot"></div>
+                  <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
+                </div>
                 <span class="tl-label">{{ jobStageIndex >= i ? step.done : step.pending }}</span>
               </div>
             </div>
@@ -1116,26 +1118,29 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── TIMELINE ───
 .tl-track {
-  display: flex; align-items: flex-start; gap: 0; margin-bottom: 20px; padding: 8px 0 4px;
+  display: flex; align-items: stretch; gap: 0; margin-bottom: 8px; padding: 8px 0 0;
 }
 .tl-step {
-  display: flex; align-items: center; flex-direction: column; position: relative; flex: 1; min-width: 0;
-  &:not(:last-child) { flex-direction: row; align-items: flex-start; }
+  display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0;
+}
+.tl-bar {
+  display: flex; align-items: center; width: 100%; height: 12px;
 }
 .tl-dot {
-  width: 12px; height: 12px; border-radius: 50%; background: $gray-300; border: 2px solid $gray-300;
+  width: 10px; height: 10px; border-radius: 50%; background: $gray-300; border: 2px solid $gray-300;
   flex-shrink: 0; z-index: 2; transition: background 0.2s, border-color 0.2s;
 }
 .tl-line {
-  flex: 1; height: 2px; background: $gray-300; margin-top: 5px; transition: background 0.2s;
+  flex: 1; height: 2px; background: $gray-300; transition: background 0.2s;
 }
 .tl-line--done { background: $gray-900; }
 .tl-label {
-  position: absolute; top: 16px; left: 0; font-size: 8px; font-weight: 600; color: $gray-400;
-  text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+  font-size: 8px; font-weight: 600; color: $gray-400; margin-top: 3px;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .tl-step--done .tl-dot { background: $gray-900; border-color: $gray-900; }
-.tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 3px rgba($blue, 0.2); }
+.tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 2px rgba($blue, 0.2); }
 .tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
 
 // ─── STAGE PANEL ───
