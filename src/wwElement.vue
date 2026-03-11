@@ -174,7 +174,7 @@
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
-                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
                   </div>
                 </div>
               </template>
@@ -182,46 +182,52 @@
               <!-- Stage 4: Complete -->
               <template v-if="activeStageIdx === 4">
                 <div class="stage-action">
-                  <!-- Read-only: completed -->
-                  <div v-if="selectedJobData.completed_at && stageEditing !== 4" class="stage-inline">
-                    <span class="stage-inline-label">Completed</span>
-                    <span class="stage-inline-value">{{ fmtDate(selectedJobData.completed_at) }}</span>
-                    <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
+                  <div class="stage-inline">
+                    <span class="stage-inline-hint">Computed end date — {{ fmtDate((selectedJobData.endDate_delay || selectedJobData.endDate || '').split('T')[0]) }}</span>
                   </div>
-                  <!-- Set complete -->
-                  <template v-else>
-                    <div class="stage-inline">
-                      <span class="stage-inline-hint">Completion date — {{ fmtDate(selectedJobData.endDate_delay || selectedJobData.endDate) }}</span>
-                      <template v-if="showCompleteTime">
-                        <input type="time" class="edit-input edit-input--sm" v-model="completeTimeOnly" />
-                      </template>
-                      <button class="btn-action btn-action--muted btn-sm" @click="showCompleteTime = !showCompleteTime">{{ showCompleteTime ? 'Remove Time' : 'Add Time' }}</button>
-                      <button class="btn-action btn-action--primary btn-sm" @click="submitComplete">Set Complete</button>
-                      <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
+                  <!-- Time controls (hidden when delay mode active) -->
+                  <template v-if="!delayMode">
+                    <!-- Time already set: read-only -->
+                    <div v-if="endDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
+                      <span class="stage-inline-label">End Time</span>
+                      <span class="stage-inline-value">{{ selectedJobData.endDate.split('T')[1] }}</span>
+                      <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
+                      <button class="btn-action btn-action--danger btn-sm" @click="removeEndTime">Remove Time</button>
                     </div>
-                    <!-- Delay section (only for in-progress jobs) -->
-                    <template v-if="jobHasStarted && !selectedJobData.completed_at">
-                      <div v-if="!delayMode" class="stage-inline" style="margin-top:6px">
-                        <template v-if="selectedJobData.endDate_delay">
-                          <span class="stage-inline-label delay-tag">Delayed to</span>
-                          <span class="stage-inline-value delay-value">{{ fmtDate(selectedJobData.endDate_delay) }}</span>
-                          <span class="stage-inline-hint">{{ selectedJobData.delay_reason }}</span>
-                          <button class="btn-action btn-action--muted btn-sm" @click="openDelayMode">Edit</button>
-                          <button class="btn-action btn-action--danger btn-sm" @click="removeDelay">Remove</button>
-                        </template>
-                        <template v-else>
-                          <button class="btn-action btn-action--warn btn-sm" @click="openDelayMode">Raise End Delay</button>
-                        </template>
-                      </div>
-                      <div v-else class="delay-form">
-                        <span class="stage-inline-label">Delayed End Date</span>
-                        <input type="date" class="edit-input edit-input--sm" v-model="delayDateInput" :min="selectedJobData.endDate" />
-                        <span class="stage-inline-label">Reason</span>
-                        <input type="text" class="edit-input edit-input--sm delay-reason-input" v-model="delayReasonInput" placeholder="Reason for delay..." />
-                        <button class="btn-action btn-action--primary btn-sm" :disabled="!delayDateInput || !delayReasonInput" @click="submitDelay">Set Delayed End Date</button>
-                        <button class="btn-action btn-action--muted btn-sm" @click="cancelDelay">Cancel</button>
-                      </div>
-                    </template>
+                    <!-- Time input (setting or editing) -->
+                    <div v-else-if="showEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
+                      <span class="stage-inline-label">Set Time</span>
+                      <input type="time" class="edit-input edit-input--sm" v-model="endTimeOnly" />
+                      <button class="btn-action btn-action--primary btn-sm" :disabled="!endTimeOnly" @click="setEndTime">Set</button>
+                      <button class="btn-action btn-action--muted btn-sm" @click="cancelEndTimeInput">Cancel</button>
+                    </div>
+                    <!-- No time set: show button -->
+                    <div v-else class="stage-inline" style="margin-top:4px">
+                      <button class="btn-action btn-action--muted btn-sm" @click="showEndTimeInput = true">Set Time</button>
+                    </div>
+                  </template>
+                  <!-- Delay section -->
+                  <template v-if="jobHasStarted">
+                    <div v-if="!delayMode" class="stage-inline" style="margin-top:6px">
+                      <template v-if="selectedJobData.endDate_delay">
+                        <span class="stage-inline-label delay-tag">Delayed to</span>
+                        <span class="stage-inline-value delay-value">{{ fmtDate(selectedJobData.endDate_delay) }}</span>
+                        <span class="stage-inline-hint">{{ selectedJobData.delay_reason }}</span>
+                        <button class="btn-action btn-action--muted btn-sm" @click="openDelayMode">Edit</button>
+                        <button class="btn-action btn-action--danger btn-sm" @click="removeDelay">Remove</button>
+                      </template>
+                      <template v-else>
+                        <button class="btn-action btn-action--warn btn-sm" @click="openDelayMode">Raise End Delay</button>
+                      </template>
+                    </div>
+                    <div v-else class="delay-form">
+                      <span class="stage-inline-label">Delayed End Date</span>
+                      <input type="date" class="edit-input edit-input--sm" v-model="delayDateInput" :min="(selectedJobData.endDate || '').split('T')[0]" />
+                      <span class="stage-inline-label">Reason</span>
+                      <input type="text" class="edit-input edit-input--sm delay-reason-input" v-model="delayReasonInput" placeholder="Reason for delay..." />
+                      <button class="btn-action btn-action--primary btn-sm" :disabled="!delayDateInput || !delayReasonInput" @click="submitDelay">Set Delayed End Date</button>
+                      <button class="btn-action btn-action--muted btn-sm" @click="cancelDelay">Cancel</button>
+                    </div>
                   </template>
                 </div>
               </template>
@@ -775,7 +781,6 @@ export default {
     // watches moved after activeStageIdx definition
 
     const stageArrivalDate = ref('');
-    const stageCompleteDate = ref('');
     const stageCheckoutDate = ref('');
 
     function submitArrival() {
@@ -783,18 +788,30 @@ export default {
       emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: stageArrivalDate.value } } });
       stageArrivalDate.value = ''; stageEditing.value = null;
     }
-    // ─── COMPLETION (stage 4) ───
-    const showCompleteTime = ref(false);
-    const completeTimeOnly = ref('');
-    function submitComplete() {
+    // ─── END TIME (stage 4) ───
+    const showEndTimeInput = ref(false);
+    const endTimeOnly = ref('');
+    const endDateHasTime = computed(() => {
+      const j = selectedJobData.value;
+      return j?.endDate && j.endDate.includes('T');
+    });
+    function setEndTime() {
+      const j = selectedJobData.value;
+      if (!j || !endTimeOnly.value) return;
+      const datePart = (j.endDate || '').split('T')[0];
+      if (!datePart) return;
+      emit('trigger-event', { name: 'onJobSetEndTime', event: { value: { jobId: selectedJobId.value, endDate: datePart + 'T' + endTimeOnly.value } } });
+      endTimeOnly.value = ''; showEndTimeInput.value = false; stageEditing.value = null;
+    }
+    function removeEndTime() {
       const j = selectedJobData.value;
       if (!j) return;
-      const baseDate = j.endDate_delay || j.endDate || '';
-      const completedAt = completeTimeOnly.value ? baseDate + 'T' + completeTimeOnly.value : baseDate;
-      if (!completedAt) return;
-      emit('trigger-event', { name: 'onJobComplete', event: { value: { jobId: selectedJobId.value, completed_at: completedAt } } });
-      completeTimeOnly.value = ''; showCompleteTime.value = false; stageEditing.value = null;
+      const datePart = (j.endDate || '').split('T')[0];
+      if (!datePart) return;
+      emit('trigger-event', { name: 'onJobSetEndTime', event: { value: { jobId: selectedJobId.value, endDate: datePart } } });
+      stageEditing.value = null;
     }
+    function cancelEndTimeInput() { showEndTimeInput.value = false; endTimeOnly.value = ''; stageEditing.value = null; }
 
     // ─── END DELAY ───
     const delayMode = ref(false);
@@ -802,7 +819,7 @@ export default {
     const delayReasonInput = ref('');
     function openDelayMode() {
       const j = selectedJobData.value;
-      delayDateInput.value = j?.endDate_delay || j?.endDate || '';
+      delayDateInput.value = j?.endDate_delay || (j?.endDate ? j.endDate.split('T')[0] : '') || '';
       delayReasonInput.value = j?.delay_reason || '';
       delayMode.value = true;
     }
@@ -816,7 +833,7 @@ export default {
       emit('trigger-event', { name: 'onJobEndDelayRemove', event: { value: { jobId: selectedJobId.value } } });
       delayMode.value = false;
     }
-    watch(selectedJobId, () => { delayMode.value = false; showCompleteTime.value = false; completeTimeOnly.value = ''; });
+    watch(selectedJobId, () => { delayMode.value = false; showEndTimeInput.value = false; endTimeOnly.value = ''; });
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
@@ -842,7 +859,7 @@ export default {
           title: j?.title || null, type: j?.type || 'uv', quantity: Number(j?.quantity) || 0,
           startDate: rescheduleJob.startDate || null, endDate: endDate || null,
           bd_number: j?.bd_number || null, pic_id: j?.pic_id || null,
-          arrival_date: j?.arrival_date || null, completed_at: j?.completed_at || null,
+          arrival_date: j?.arrival_date || null,
           checkout_date: j?.checkout_date || null,
         } },
       });
@@ -964,7 +981,8 @@ export default {
         const delayEnd = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
           ? delayDateInput.value
           : (job.endDate_delay || '');
-        if (!delayEnd || !job.endDate || delayEnd <= job.endDate) continue;
+        const jobEndClean = job.endDate ? job.endDate.split('T')[0] : '';
+        if (!delayEnd || !jobEndClean || delayEnd <= jobEndClean) continue;
         const ji = jobSet.get(jid);
         if (!ji || ji.ri === undefined) continue;
         const ri = ji.ri;
@@ -974,7 +992,7 @@ export default {
         for (let di = 0; di < days.length; di++) {
           const d = days[di];
           if (d.outside) continue;
-          if (d.dateStr > job.endDate && d.dateStr <= delayEnd && !d.isWeekend) {
+          if (d.dateStr > jobEndClean && d.dateStr <= delayEnd && !d.isWeekend) {
             delayDayIdxs.push(di);
           }
         }
@@ -1047,10 +1065,12 @@ export default {
       const j = selectedJobData.value;
       if (!j) return -1;
       if (j.checkout_date) return 6;
-      if (j.completed_at || (j.endDate && todayStr > j.endDate)) return 5;
+      const endHasTime = j.endDate && j.endDate.includes('T');
+      const endDatePart = j.endDate ? j.endDate.split('T')[0] : '';
+      if (endHasTime) return 5;
       if (j.arrival_date) {
-        // Arrived: show "Started" stage (3) if not yet past end, "Complete" stage (4) if auto-completable
-        return (j.endDate && todayStr > j.endDate) ? 4 : 3;
+        // Arrived: show "Started" stage (3) if not yet past end, "Complete" stage (4) if past end date
+        return (endDatePart && todayStr > endDatePart) ? 4 : 3;
       }
       if (j.bd_number) return 2;
       return 1;
@@ -1083,7 +1103,8 @@ export default {
         }
         if (step.key === 'completed') {
           if (states[i] === 'active') {
-            return (j?.endDate && todayStr > j.endDate) ? 'Job Ended' : 'Pending Completion';
+            const ep = j?.endDate ? j.endDate.split('T')[0] : '';
+            return (ep && todayStr > ep) ? 'Job Ended' : 'Pending Completion';
           }
           return 'Completed';
         }
@@ -1100,7 +1121,7 @@ export default {
         if (step.key === 'connected') return j.bd_number || '';
         if (step.key === 'arrived') return fmtDate(j.arrival_date) || '';
         if (step.key === 'started') return fmtDate(j.startDate) || '';
-        if (step.key === 'completed') return fmtDate(j.completed_at) || fmtDate(j.endDate) || '';
+        if (step.key === 'completed') return fmtDate(j.endDate) || '';
         if (step.key === 'checkout') return fmtDate(j.checkout_date) || '';
         return '';
       });
@@ -1127,7 +1148,8 @@ export default {
     });
     const jobAutoCompleted = computed(() => {
       const j = selectedJobData.value;
-      return j?.endDate && todayStr > j.endDate && !j.completed_at;
+      const ep = j?.endDate ? j.endDate.split('T')[0] : '';
+      return ep && todayStr > ep && !(j.endDate && j.endDate.includes('T'));
     });
 
     function selectJob(jobId, isDraft) {
@@ -1176,7 +1198,7 @@ export default {
           title: editForm.title || null, type: editForm.type || 'uv', quantity: editForm.quantity,
           startDate: sd, endDate: ed,
           bd_number: j.bd_number || null, pic_id: j.pic_id || null,
-          arrival_date: editForm.arrival_date || null, completed_at: j.completed_at || null,
+          arrival_date: editForm.arrival_date || null,
           checkout_date: editForm.checkout_date || null,
         } },
       });
@@ -1293,7 +1315,7 @@ export default {
         }
       } else if (dragState.mode === 'delay-stretch') {
         const j = selectedJobData.value;
-        if (j && ds >= j.endDate) {
+        if (j && ds >= (j.endDate ? j.endDate.split('T')[0] : '')) {
           delayDateInput.value = ds;
         }
       }
@@ -1367,9 +1389,9 @@ export default {
       picSearch, picDropdownOpen, filteredPicOptions, selectPic, clearDraftPic, closePicDropdown,
       stageBdSearch, stageBdOpen, stageBdSelected, filteredStageBdOptions, closeStageBdDropdown, selectStageBd, clearStageBd, submitStageBd,
       stageEditing, startStageEdit, cancelStageEdit,
-      stageArrivalDate, stageCompleteDate, stageCheckoutDate,
-      submitArrival, submitComplete, submitCheckout,
-      showCompleteTime, completeTimeOnly,
+      stageArrivalDate, stageCheckoutDate,
+      submitArrival, submitCheckout,
+      showEndTimeInput, endTimeOnly, endDateHasTime, setEndTime, removeEndTime, cancelEndTimeInput,
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
       startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,

@@ -48,9 +48,9 @@ export default {
       event: { value: { jobId: null, arrival_date: '' } },
     },
     {
-      name: 'onJobComplete',
-      label: { en: 'On job complete' },
-      event: { value: { jobId: null, completed_at: '' } },
+      name: 'onJobSetEndTime',
+      label: { en: 'On job set/remove end time' },
+      event: { value: { jobId: null, endDate: '' } },
     },
     {
       name: 'onJobCheckout',
