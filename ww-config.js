@@ -19,13 +19,13 @@ export default {
     {
       name: 'onJobCreate',
       label: { en: 'On job create' },
-      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', dailyAllocation: [], bd_number: '', pic_id: '' } },
+      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '' } },
       default: true,
     },
     {
       name: 'onJobUpdate',
       label: { en: 'On job update' },
-      event: { value: { jobId: null, title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '', arrival_date: '', completed_at: '', checkout_date: '', dailyAllocation: [] } },
+      event: { value: { jobId: null, title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '', arrival_date: '', completed_at: '', checkout_date: '' } },
     },
     {
       name: 'onJobDelete',
