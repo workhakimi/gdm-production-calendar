@@ -563,7 +563,7 @@ export default {
     // ─── ALLOCATION ENGINE ───
     function allocateJobs(jobs, extra) {
       const am = {}, ed = {};
-      const sorted = [...jobs].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      const sorted = [...jobs]; // preserve array order = booking priority (first-booked first-served)
       if (extra) sorted.push(extra);
       for (const job of sorted) {
         if (!job.startDate || !job.quantity || job.quantity <= 0) continue;
