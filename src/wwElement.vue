@@ -1552,15 +1552,15 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-scroll { overflow-x: auto; flex: 1; }
 
 // ─── DAY-OF-WEEK ───
-.cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); background: $gray-50; border-bottom: 1px solid var(--cal-border); min-width: 700px; }
+.cal-dow-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: $gray-50; border-bottom: 1px solid var(--cal-border); min-width: 700px; }
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; min-width: 700px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); position: relative; background: $white; min-width: 700px; }
 .cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
-  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
+  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default; overflow: hidden;
   &:nth-child(7n) { border-right: none; }
 }
 .cal-day--outside { opacity: 0.3; pointer-events: none; }
