@@ -109,7 +109,7 @@
                   <div class="tl-dot"></div>
                   <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': stageStates[i] === 'done' || stageStates[i] === 'warn' }"></div>
                 </div>
-                <span class="tl-label">{{ stageStates[i] === 'warn' ? step.warn : (stageStates[i] === 'done' ? step.done : step.pending) }}</span>
+                <span class="tl-label">{{ stageLabels[i] }}</span>
               </div>
             </div>
 
@@ -164,8 +164,18 @@
                 </div>
               </template>
 
-              <!-- Stage 3/4: Started / Complete -->
-              <template v-if="activeStageIdx === 3 || activeStageIdx === 4">
+              <!-- Stage 3: Started -->
+              <template v-if="activeStageIdx === 3">
+                <div class="stage-action">
+                  <div class="stage-inline">
+                    <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
+                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Stage 4: Complete -->
+              <template v-if="activeStageIdx === 4">
                 <div class="stage-action">
                   <div v-if="selectedJobData.completed_at && stageEditing !== 4" class="stage-inline">
                     <span class="stage-inline-label">Completed</span>
@@ -173,30 +183,13 @@
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
                   </div>
                   <div v-else class="stage-inline">
-                    <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
-                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                    <span v-if="jobHasStarted" class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                    <span v-else class="stage-inline-hint">Past end date — {{ fmtDate(selectedJobData.endDate) }}</span>
                     <span class="stage-inline-sep"></span>
-                    <button class="btn-action btn-action--muted btn-sm" @click="enterReschedule">Reschedule</button>
                     <input type="date" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
                     <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Complete</button>
                     <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
-                </div>
-              </template>
-
-              <!-- Reschedule inline mode -->
-              <template v-if="isRescheduling">
-                <div class="stage-action stage-action--warn">
-                  <div class="stage-inline">
-                    <span class="stage-inline-label">New Start</span>
-                    <input type="date" class="edit-input edit-input--sm" v-model="rescheduleJob.startDate" />
-                    <span class="stage-inline-label">End</span>
-                    <span class="stage-inline-computed">{{ rescheduleEndDate }}</span>
-                    <span class="stage-inline-sep"></span>
-                    <button class="btn-action btn-action--muted btn-sm" @click="cancelReschedule">Cancel</button>
-                    <button class="btn-action btn-action--submit btn-sm" :disabled="!rescheduleJob.startDate" @click="submitReschedule">Confirm</button>
-                  </div>
-                  <div class="stage-warn-msg">Priority may change. Drag the preview bar on the calendar or type a date above.</div>
                 </div>
               </template>
 
@@ -460,7 +453,7 @@ const STAGES = [
   { key: 'created', done: 'Created', pending: 'Created', warn: 'Created' },
   { key: 'connected', done: 'Connected', pending: 'Pending Connection', warn: 'Connection Lost' },
   { key: 'arrived', done: 'Arrived', pending: 'Pending Arrival', warn: 'Arrival Issue' },
-  { key: 'started', done: 'Started', pending: 'Pending Start', warn: 'Start Issue' },
+  { key: 'started', done: 'Job Started', pending: 'Pending Start', warn: 'Start Issue' },
   { key: 'completed', done: 'Completed', pending: 'Pending Completion', warn: 'Completion Issue' },
   { key: 'checkout', done: 'Checked Out', pending: 'Pending Checkout', warn: 'Checkout Issue' },
 ];
@@ -952,6 +945,28 @@ export default {
       });
     });
 
+    // Dynamic labels per stage based on job state
+    const stageLabels = computed(() => {
+      const j = selectedJobData.value;
+      const states = stageStates.value;
+      return STAGES.map((step, i) => {
+        if (states[i] === 'warn') return step.warn;
+        if (states[i] === 'pending') return step.pending;
+        // Done or active — use context-aware labels
+        if (step.key === 'started') {
+          if (j && j.startDate && todayStr >= j.startDate) return 'Job Started';
+          return 'Pending Start';
+        }
+        if (step.key === 'completed') {
+          if (states[i] === 'active') {
+            return (j?.endDate && todayStr > j.endDate) ? 'Job Ended' : 'Pending Completion';
+          }
+          return 'Completed';
+        }
+        return states[i] === 'done' ? step.done : step.pending;
+      });
+    });
+
     // Selected timeline step (for editing milestones out of order)
     const selectedStageIdx = ref(null); // null = follow current stage
     const activeStageIdx = computed(() => selectedStageIdx.value !== null ? selectedStageIdx.value : jobStageIndex.value);
@@ -1194,7 +1209,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
