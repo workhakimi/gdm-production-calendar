@@ -185,11 +185,10 @@
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
                   </div>
                   <div v-else class="stage-inline">
-                    <span v-if="jobHasStarted" class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
-                    <span v-else class="stage-inline-hint">Past end date — {{ fmtDate(selectedJobData.endDate) }}</span>
+                    <span class="stage-inline-hint">Computed end date — {{ fmtDate(selectedJobData.endDate) }}</span>
                     <span class="stage-inline-sep"></span>
-                    <input type="date" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
-                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Complete</button>
+                    <input type="datetime-local" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
+                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Set Complete</button>
                     <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
                 </div>
