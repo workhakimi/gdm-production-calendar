@@ -110,7 +110,7 @@
               >
                 <div class="tl-bar">
                   <div class="tl-dot"></div>
-                  <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': stageStates[i] === 'done' || stageStates[i] === 'warn' }"></div>
+                  <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': stageStates[i] === 'done' || stageStates[i] === 'warn' || stageStates[i] === 'current' }"></div>
                 </div>
                 <span class="tl-label">{{ stageLabels[i] }}</span>
                 <span v-if="stageDates[i]" class="tl-date">{{ stageDates[i] }}</span>
@@ -1233,12 +1233,13 @@ export default {
       if (effectiveEnd && todayStr > effectiveEnd) return 5;
       // In progress: today >= start date
       if (j.startDate && todayStr >= j.startDate) return 3;
-      if (j.arrival_date) return 2;
+      // Arrival set moves to pending start
+      if (j.arrival_date) return 3;
       if (j.bd_number) return 2;
       return 1;
     });
 
-    // Per-stage state: 'done' (green), 'warn' (yellow), 'active' (blue), 'pending' (grey)
+    // Per-stage state: 'done' (green), 'warn' (yellow), 'active' (blue), 'current' (black), 'pending' (grey)
     const stageStates = computed(() => {
       const j = selectedJobData.value;
       if (!j) return STAGES.map(() => 'pending');
@@ -1246,15 +1247,27 @@ export default {
       return STAGES.map((step, i) => {
         if (i > si) return 'pending';
         if (i === si) return 'active';
-        // Past stages — check for issues, but also mark done if actually happened
+        // Past stages
         if (step.key === 'connected') {
           if (!j.bd_number) return 'warn';
           if (j.bd_number && !selectedBdBatch.value) return 'warn';
           return 'done';
         }
-        if (step.key === 'arrived') return j.arrival_date ? 'done' : 'warn';
+        if (step.key === 'arrived') {
+          if (!j.arrival_date) return 'warn';
+          return 'done';
+        }
         if (step.key === 'started') {
-          return (j.startDate && todayStr >= j.startDate) ? 'done' : 'pending';
+          if (j.startDate && todayStr >= j.startDate) return 'done';
+          return 'current'; // arrival set but not yet started — black
+        }
+        if (step.key === 'completed') {
+          const ep = j?.endDate ? j.endDate.split('T')[0] : '';
+          const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+          const effectiveEnd = dp || ep;
+          if (j?.endDate && j.endDate.includes('T')) return 'done';
+          if (effectiveEnd && todayStr > effectiveEnd) return 'done';
+          return 'current'; // in progress but not ended — black
         }
         return 'done';
       });
@@ -1265,20 +1278,31 @@ export default {
       const j = selectedJobData.value;
       const states = stageStates.value;
       return STAGES.map((step, i) => {
-        if (states[i] === 'warn') return step.warn;
-        // Started: reflect real state regardless of linear progression
+        // Connected
+        if (step.key === 'connected') {
+          if (states[i] === 'warn') {
+            // Only "Connection Lost" if bd_number exists but doesn't match
+            return (j?.bd_number) ? 'Connection Lost' : 'Pending Connection';
+          }
+          return states[i] === 'done' ? 'Connected' : 'Pending Connection';
+        }
+        // Arrived
+        if (step.key === 'arrived') {
+          if (states[i] === 'warn') return 'Pending Arrival';
+          if (states[i] === 'done') return 'Arrival Set';
+          return 'Pending Arrival';
+        }
+        // Started
         if (step.key === 'started') {
+          if (states[i] === 'done') return 'In Progress';
+          if (states[i] === 'current') return 'Pending Start';
           if (j && j.startDate && todayStr >= j.startDate) return 'In Progress';
           return 'Pending Start';
         }
-        // Completed: check effective end date (delay or booking)
+        // Completed
         if (step.key === 'completed') {
-          const ep = j?.endDate ? j.endDate.split('T')[0] : '';
-          const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
-          const effectiveEnd = dp || ep;
-          if (j?.endDate && j.endDate.includes('T')) return 'Job Ended';
-          if (effectiveEnd && todayStr > effectiveEnd) return 'Job Ended';
-          if (j?.endDate_delay) return 'Pending Completion';
+          if (states[i] === 'done') return 'Job Ended';
+          if (states[i] === 'current') return 'Pending Completion';
           return 'Pending Completion';
         }
         if (states[i] === 'pending') return step.pending;
@@ -1747,6 +1771,8 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .tl-step--warn .tl-label { color: $amber; font-weight: 700; }
 .tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 2px rgba($blue, 0.2); }
 .tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
+.tl-step--current .tl-dot { background: $gray-800; border-color: $gray-800; }
+.tl-step--current .tl-label { color: $gray-800; font-weight: 600; }
 .tl-step--pending .tl-dot { background: $gray-300; border-color: $gray-300; }
 .tl-step--picked .tl-dot { background: $white; border-color: $gray-700; box-shadow: 0 0 0 2px rgba($gray-700, 0.25); }
 .tl-step--picked .tl-label { color: $gray-700; font-weight: 700; }
