@@ -57,7 +57,7 @@
           :key="seg.key"
           class="cal-job-bar"
           :class="{
-            'cal-job--selected': !seg.isGap && !seg.isDelay && seg.jobId === selectedJobId,
+            'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft && !seg.isGap,
             'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
             'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
@@ -66,13 +66,12 @@
             'cal-job--delay': seg.isDelay,
           }"
           :style="segmentStyle(seg)"
-          @click.stop="!seg.isGap && !seg.isDelay && selectJob(seg.jobId, seg.isDraft)"
+          @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
           @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
         >
           <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-          <span v-if="!seg.isGap && !seg.isDelay && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
-          <span v-if="!seg.isGap && !seg.isDelay && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <span v-if="seg.isDelay && seg.showLabel" class="cal-job-title cal-delay-label">DELAY</span>
+          <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
+          <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
           <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
           <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
         </div>
@@ -182,43 +181,17 @@
               <!-- Stage 4: Complete -->
               <template v-if="activeStageIdx === 4">
                 <div class="stage-action">
-                  <div class="stage-inline">
-                    <span class="stage-inline-hint">Computed end date — {{ fmtDate((selectedJobData.endDate_delay || selectedJobData.endDate || '').split('T')[0]) }}</span>
-                  </div>
-                  <!-- Time controls (hidden when delay mode active) -->
-                  <template v-if="!delayMode">
-                    <!-- Time already set: read-only -->
-                    <div v-if="endDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
-                      <span class="stage-inline-label">End Time</span>
-                      <span class="stage-inline-value">{{ selectedJobData.endDate.split('T')[1] }}</span>
-                      <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
-                      <button class="btn-action btn-action--danger btn-sm" @click="removeEndTime">Remove Time</button>
+                  <!-- ── DELAY EXISTS: show delay info + delay time controls ── -->
+                  <template v-if="selectedJobData.endDate_delay">
+                    <div class="stage-inline">
+                      <span class="stage-inline-hint">Computed end date — {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
                     </div>
-                    <!-- Time input (setting or editing) -->
-                    <div v-else-if="showEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
-                      <span class="stage-inline-label">Set Time</span>
-                      <input type="time" class="edit-input edit-input--sm" v-model="endTimeOnly" />
-                      <button class="btn-action btn-action--primary btn-sm" :disabled="!endTimeOnly" @click="setEndTime">Set</button>
-                      <button class="btn-action btn-action--muted btn-sm" @click="cancelEndTimeInput">Cancel</button>
-                    </div>
-                    <!-- No time set: show button -->
-                    <div v-else class="stage-inline" style="margin-top:4px">
-                      <button class="btn-action btn-action--muted btn-sm" @click="showEndTimeInput = true">Set Time</button>
-                    </div>
-                  </template>
-                  <!-- Delay section -->
-                  <template v-if="jobHasStarted">
-                    <div v-if="!delayMode" class="stage-inline" style="margin-top:6px">
-                      <template v-if="selectedJobData.endDate_delay">
-                        <span class="stage-inline-label delay-tag">Delayed to</span>
-                        <span class="stage-inline-value delay-value">{{ fmtDate(selectedJobData.endDate_delay) }}</span>
-                        <span class="stage-inline-hint">{{ selectedJobData.delay_reason }}</span>
-                        <button class="btn-action btn-action--muted btn-sm" @click="openDelayMode">Edit</button>
-                        <button class="btn-action btn-action--danger btn-sm" @click="removeDelay">Remove</button>
-                      </template>
-                      <template v-else>
-                        <button class="btn-action btn-action--warn btn-sm" @click="openDelayMode">Raise End Delay</button>
-                      </template>
+                    <div v-if="!delayMode" class="stage-inline" style="margin-top:4px">
+                      <span class="stage-inline-label delay-tag">Delayed to</span>
+                      <span class="stage-inline-value delay-value">{{ fmtDate((selectedJobData.endDate_delay || '').split('T')[0]) }}</span>
+                      <span class="stage-inline-hint">{{ selectedJobData.delay_reason }}</span>
+                      <button class="btn-action btn-action--muted btn-sm" @click="openDelayMode">Edit</button>
+                      <button class="btn-action btn-action--danger btn-sm" @click="removeDelay">Remove</button>
                     </div>
                     <div v-else class="delay-form">
                       <span class="stage-inline-label">Delayed End Date</span>
@@ -228,6 +201,63 @@
                       <button class="btn-action btn-action--primary btn-sm" :disabled="!delayDateInput || !delayReasonInput" @click="submitDelay">Set Delayed End Date</button>
                       <button class="btn-action btn-action--muted btn-sm" @click="cancelDelay">Cancel</button>
                     </div>
+                    <!-- Delay end time controls (hidden when editing delay date) -->
+                    <template v-if="!delayMode">
+                      <div v-if="delayEndDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
+                        <span class="stage-inline-label">Delay End Time</span>
+                        <span class="stage-inline-value">{{ selectedJobData.endDate_delay.split('T')[1] }}</span>
+                        <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
+                        <button class="btn-action btn-action--danger btn-sm" @click="removeDelayEndTime">Remove Time</button>
+                      </div>
+                      <div v-else-if="showDelayEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
+                        <span class="stage-inline-label">Set Time</span>
+                        <input type="time" class="edit-input edit-input--sm" v-model="delayEndTimeOnly" />
+                        <button class="btn-action btn-action--primary btn-sm" :disabled="!delayEndTimeOnly" @click="setDelayEndTime">Set</button>
+                        <button class="btn-action btn-action--muted btn-sm" @click="cancelDelayEndTimeInput">Cancel</button>
+                      </div>
+                      <div v-else class="stage-inline" style="margin-top:4px">
+                        <button class="btn-action btn-action--muted btn-sm" @click="showDelayEndTimeInput = true">Set Time</button>
+                      </div>
+                    </template>
+                  </template>
+
+                  <!-- ── NO DELAY: show end date + end time controls ── -->
+                  <template v-else>
+                    <div class="stage-inline">
+                      <span class="stage-inline-hint">Computed end date — {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
+                    </div>
+                    <!-- End time controls (hidden when delay form active) -->
+                    <template v-if="!delayMode">
+                      <div v-if="endDateHasTime && stageEditing !== 4" class="stage-inline" style="margin-top:4px">
+                        <span class="stage-inline-label">End Time</span>
+                        <span class="stage-inline-value">{{ selectedJobData.endDate.split('T')[1] }}</span>
+                        <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
+                        <button class="btn-action btn-action--danger btn-sm" @click="removeEndTime">Remove Time</button>
+                      </div>
+                      <div v-else-if="showEndTimeInput || stageEditing === 4" class="stage-inline" style="margin-top:4px">
+                        <span class="stage-inline-label">Set Time</span>
+                        <input type="time" class="edit-input edit-input--sm" v-model="endTimeOnly" />
+                        <button class="btn-action btn-action--primary btn-sm" :disabled="!endTimeOnly" @click="setEndTime">Set</button>
+                        <button class="btn-action btn-action--muted btn-sm" @click="cancelEndTimeInput">Cancel</button>
+                      </div>
+                      <div v-else class="stage-inline" style="margin-top:4px">
+                        <button class="btn-action btn-action--muted btn-sm" @click="showEndTimeInput = true">Set Time</button>
+                      </div>
+                    </template>
+                    <!-- Raise delay option -->
+                    <template v-if="jobHasStarted">
+                      <div v-if="!delayMode" class="stage-inline" style="margin-top:6px">
+                        <button class="btn-action btn-action--warn btn-sm" @click="openDelayMode">Raise End Delay</button>
+                      </div>
+                      <div v-else class="delay-form">
+                        <span class="stage-inline-label">Delayed End Date</span>
+                        <input type="date" class="edit-input edit-input--sm" v-model="delayDateInput" :min="(selectedJobData.endDate || '').split('T')[0]" />
+                        <span class="stage-inline-label">Reason</span>
+                        <input type="text" class="edit-input edit-input--sm delay-reason-input" v-model="delayReasonInput" placeholder="Reason for delay..." />
+                        <button class="btn-action btn-action--primary btn-sm" :disabled="!delayDateInput || !delayReasonInput" @click="submitDelay">Set Delayed End Date</button>
+                        <button class="btn-action btn-action--muted btn-sm" @click="cancelDelay">Cancel</button>
+                      </div>
+                    </template>
                   </template>
                 </div>
               </template>
@@ -813,13 +843,38 @@ export default {
     }
     function cancelEndTimeInput() { showEndTimeInput.value = false; endTimeOnly.value = ''; stageEditing.value = null; }
 
+    // ─── DELAY END TIME (stage 4, when delay exists) ───
+    const showDelayEndTimeInput = ref(false);
+    const delayEndTimeOnly = ref('');
+    const delayEndDateHasTime = computed(() => {
+      const j = selectedJobData.value;
+      return j?.endDate_delay && j.endDate_delay.includes('T');
+    });
+    function setDelayEndTime() {
+      const j = selectedJobData.value;
+      if (!j || !delayEndTimeOnly.value) return;
+      const datePart = (j.endDate_delay || '').split('T')[0];
+      if (!datePart) return;
+      emit('trigger-event', { name: 'onJobSetDelayEndTime', event: { value: { jobId: selectedJobId.value, endDate_delay: datePart + 'T' + delayEndTimeOnly.value } } });
+      delayEndTimeOnly.value = ''; showDelayEndTimeInput.value = false; stageEditing.value = null;
+    }
+    function removeDelayEndTime() {
+      const j = selectedJobData.value;
+      if (!j) return;
+      const datePart = (j.endDate_delay || '').split('T')[0];
+      if (!datePart) return;
+      emit('trigger-event', { name: 'onJobSetDelayEndTime', event: { value: { jobId: selectedJobId.value, endDate_delay: datePart } } });
+      stageEditing.value = null;
+    }
+    function cancelDelayEndTimeInput() { showDelayEndTimeInput.value = false; delayEndTimeOnly.value = ''; stageEditing.value = null; }
+
     // ─── END DELAY ───
     const delayMode = ref(false);
     const delayDateInput = ref('');
     const delayReasonInput = ref('');
     function openDelayMode() {
       const j = selectedJobData.value;
-      delayDateInput.value = j?.endDate_delay || (j?.endDate ? j.endDate.split('T')[0] : '') || '';
+      delayDateInput.value = (j?.endDate_delay ? j.endDate_delay.split('T')[0] : '') || (j?.endDate ? j.endDate.split('T')[0] : '') || '';
       delayReasonInput.value = j?.delay_reason || '';
       delayMode.value = true;
     }
@@ -833,7 +888,7 @@ export default {
       emit('trigger-event', { name: 'onJobEndDelayRemove', event: { value: { jobId: selectedJobId.value } } });
       delayMode.value = false;
     }
-    watch(selectedJobId, () => { delayMode.value = false; showEndTimeInput.value = false; endTimeOnly.value = ''; });
+    watch(selectedJobId, () => { delayMode.value = false; showEndTimeInput.value = false; endTimeOnly.value = ''; showDelayEndTimeInput.value = false; delayEndTimeOnly.value = ''; });
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
@@ -902,6 +957,7 @@ export default {
         }
         if (!activeDays.size) continue;
         const col = ji.color || (ji.type === 'laser' ? JOB_COLORS_LASER[si % JOB_COLORS_LASER.length] : JOB_COLORS_UV[si % JOB_COLORS_UV.length]);
+        ji.resolvedColor = col;
 
         // Find the full span per week (first active to last active in that week row)
         const weekSpans = {};
@@ -978,9 +1034,10 @@ export default {
         const job = resolvedJobs.value.find(j => j.id === jid);
         if (!job) continue;
         // Use delayDateInput preview if this job is selected and in delay mode
-        const delayEnd = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
+        const delayEndRaw = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
           ? delayDateInput.value
           : (job.endDate_delay || '');
+        const delayEnd = delayEndRaw ? delayEndRaw.split('T')[0] : '';
         const jobEndClean = job.endDate ? job.endDate.split('T')[0] : '';
         if (!delayEnd || !jobEndClean || delayEnd <= jobEndClean) continue;
         const ji = jobSet.get(jid);
@@ -1018,14 +1075,14 @@ export default {
           else { wk[wi].push({ sc: sp.min, ec: sp.max, ri }); }
         }
 
-        const dFirst = dWeekKeys[0], dLast = dWeekKeys[dWeekKeys.length - 1];
+        const dLast = dWeekKeys[dWeekKeys.length - 1];
         for (const wi of dWeekKeys) {
           const sp = dWeekSpans[wi];
           segs.push({
             key: `${jid}-delay-${wi}`, jobId: jid, title: ji.title, type: ji.type,
-            totalQty: ji.totalQty, color: null, isGap: false, isDelay: true,
+            totalQty: ji.totalQty, color: ji.resolvedColor, isGap: false, isDelay: true,
             isDraft: false, isFirst: false, isLast: wi === dLast,
-            showLabel: wi === dFirst, weekIndex: wi, startCol: sp.min, endCol: sp.max, rowIndex: ri,
+            showLabel: true, weekIndex: wi, startCol: sp.min, endCol: sp.max, rowIndex: ri,
           });
         }
       }
@@ -1038,7 +1095,7 @@ export default {
       gridTemplateRows: `repeat(${Math.max(1, Math.ceil(calendarDays.value.length / 7))}, 1fr)`,
     }));
     function segmentStyle(seg) {
-      const bg = seg.isDelay ? '#ef4444' : (seg.isGap ? '#e5e7eb' : seg.color);
+      const bg = seg.isGap ? '#e5e7eb' : seg.color;
       return {
         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
         marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px',
@@ -1121,7 +1178,10 @@ export default {
         if (step.key === 'connected') return j.bd_number || '';
         if (step.key === 'arrived') return fmtDate(j.arrival_date) || '';
         if (step.key === 'started') return fmtDate(j.startDate) || '';
-        if (step.key === 'completed') return fmtDate(j.endDate) || '';
+        if (step.key === 'completed') {
+          if (j.endDate_delay) return 'Delayed: ' + (fmtDate((j.endDate_delay || '').split('T')[0]) || '');
+          return fmtDate((j.endDate || '').split('T')[0]) || '';
+        }
         if (step.key === 'checkout') return fmtDate(j.checkout_date) || '';
         return '';
       });
@@ -1392,6 +1452,7 @@ export default {
       stageArrivalDate, stageCheckoutDate,
       submitArrival, submitCheckout,
       showEndTimeInput, endTimeOnly, endDateHasTime, setEndTime, removeEndTime, cancelEndTimeInput,
+      showDelayEndTimeInput, delayEndTimeOnly, delayEndDateHasTime, setDelayEndTime, removeDelayEndTime, cancelDelayEndTimeInput,
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
       startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
@@ -1476,7 +1537,6 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   opacity: 0.85; cursor: default;
   background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.2) 3px, rgba(255,255,255,0.2) 6px) !important;
 }
-.cal-delay-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.9; }
 .cal-job-title { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cal-job-qty { font-size: 8px; opacity: 0.8; margin-left: 4px; flex-shrink: 0; }
 .cal-resize-handle {

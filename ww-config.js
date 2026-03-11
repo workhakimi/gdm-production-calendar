@@ -53,6 +53,11 @@ export default {
       event: { value: { jobId: null, endDate: '' } },
     },
     {
+      name: 'onJobSetDelayEndTime',
+      label: { en: 'On job set/remove delay end time' },
+      event: { value: { jobId: null, endDate_delay: '' } },
+    },
+    {
       name: 'onJobCheckout',
       label: { en: 'On job checkout' },
       event: { value: { jobId: null, checkout_date: '' } },
