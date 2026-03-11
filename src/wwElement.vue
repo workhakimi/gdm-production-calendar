@@ -472,6 +472,54 @@
           </div>
         </div>
 
+        <!-- ═══ BOOKINGS LIST ═══ -->
+        <div v-if="activeTab === 'bookings'" class="cal-tab-content">
+          <div class="bl-filters">
+            <div class="edit-field edit-field--compact">
+              <label class="edit-label">From</label>
+              <input class="edit-input edit-input--sm" type="date" v-model="blFrom" />
+            </div>
+            <div class="edit-field edit-field--compact">
+              <label class="edit-label">To</label>
+              <input class="edit-input edit-input--sm" type="date" v-model="blTo" />
+            </div>
+            <span class="bl-count">{{ filteredBookings.length }} job{{ filteredBookings.length !== 1 ? 's' : '' }}</span>
+          </div>
+          <div v-if="!filteredBookings.length" class="cal-empty-tab">No jobs in this date range.</div>
+          <div v-else class="bl-list">
+            <div
+              v-for="job in filteredBookings"
+              :key="job.id"
+              class="bl-card"
+              :class="{ 'bl-card--selected': job.id === selectedJobId }"
+              @click="selectJob(job.id, false)"
+            >
+              <div class="bl-card-header">
+                <span class="bl-card-title">{{ job.title }}</span>
+                <span class="type-tag type-tag--sm" :class="'type-tag--' + (job.type || 'uv')">{{ job.type === 'laser' ? 'Laser' : 'UV' }}</span>
+                <span class="bl-card-qty">{{ job.quantity }}</span>
+                <span v-if="job.pic_id" class="bl-card-pic">{{ getTeammateName(job.pic_id) }}</span>
+              </div>
+              <div class="bl-card-dates">
+                <span>{{ fmtDate(job.startDate) }} → {{ fmtDate((job.endDate || '').split('T')[0]) }}</span>
+                <span v-if="job.endDate_delay" class="bl-card-delay">Delayed: {{ fmtDate((job.endDate_delay || '').split('T')[0]) }}</span>
+                <span v-if="job.bd_number" class="bl-card-bd">BD# {{ job.bd_number }}</span>
+              </div>
+              <div class="bl-tl-track">
+                <div
+                  v-for="(step, i) in STAGES"
+                  :key="step.key"
+                  class="bl-tl-step"
+                  :class="'bl-tl--' + getJobStageState(job, i)"
+                >
+                  <div class="bl-tl-dot"></div>
+                  <div v-if="i < STAGES.length - 1" class="bl-tl-line" :class="{ 'bl-tl-line--done': getJobStageState(job, i) === 'done' || getJobStageState(job, i) === 'warn' || getJobStageState(job, i) === 'current' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ═══ MANAGE CAPACITY ═══ -->
         <div v-if="activeTab === 'capacity'" class="cal-tab-content">
           <div class="section-heading">Add Capacity Rule</div>
@@ -523,6 +571,7 @@ const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const TABS = [
   { key: 'manage', label: 'Manage Job' },
   { key: 'new', label: 'New Job' },
+  { key: 'bookings', label: 'Bookings List' },
   { key: 'capacity', label: 'Manage Capacity' },
 ];
 const STAGES = [
@@ -1234,7 +1283,8 @@ export default {
       if (endHasTime) return 5;
       if (effectiveEnd && _todayRef.value > effectiveEnd) return 5;
       // In progress: today >= start date
-      if (j.startDate && _todayRef.value >= j.startDate) return 3;
+      const startDatePart = j.startDate ? j.startDate.split('T')[0] : '';
+      if (startDatePart && _todayRef.value >= startDatePart) return 3;
       // Arrival set moves to pending start
       if (j.arrival_date) return 3;
       if (j.bd_number) return 2;
@@ -1260,7 +1310,8 @@ export default {
           return 'done';
         }
         if (step.key === 'started') {
-          if (j.startDate && _todayRef.value >= j.startDate) return 'done';
+          const sp = j.startDate ? j.startDate.split('T')[0] : '';
+          if (sp && _todayRef.value >= sp) return 'done';
           return 'current'; // arrival set but not yet started — black
         }
         if (step.key === 'completed') {
@@ -1298,7 +1349,7 @@ export default {
         if (step.key === 'started') {
           if (states[i] === 'done') return 'In Progress';
           if (states[i] === 'current') return 'Pending Start';
-          if (j && j.startDate && _todayRef.value >= j.startDate) return 'In Progress';
+          if (j && j.startDate && _todayRef.value >= j.startDate.split('T')[0]) return 'In Progress';
           return 'Pending Start';
         }
         // Completed
@@ -1343,7 +1394,7 @@ export default {
 
     const jobHasStarted = computed(() => {
       const j = selectedJobData.value;
-      return j?.startDate && _todayRef.value >= j.startDate;
+      return j?.startDate && _todayRef.value >= j.startDate.split('T')[0];
     });
     const jobAutoCompleted = computed(() => {
       const j = selectedJobData.value;
@@ -1578,6 +1629,59 @@ export default {
       if (_midnightTimer) clearTimeout(_midnightTimer);
     });
 
+    // ─── BOOKINGS LIST ───
+    const blFromDefault = (() => { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return toDateStr(d); })();
+    const blToDefault = (() => { const d = new Date(now.getFullYear(), now.getMonth() + 2, 0); return toDateStr(d); })();
+    const blFrom = ref(blFromDefault);
+    const blTo = ref(blToDefault);
+    const filteredBookings = computed(() => {
+      const from = blFrom.value, to = blTo.value;
+      return resolvedJobs.value
+        .filter(j => j.startDate && (!from || j.startDate >= from) && (!to || j.startDate <= to))
+        .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+    });
+    // Reusable stage state for any job (used by bookings list mini-timeline)
+    function getJobStageIdx(j) {
+      if (!j) return -1;
+      if (j.checkout_date) return 6;
+      const endHasTime = j.endDate && j.endDate.includes('T');
+      const endDatePart = j.endDate ? j.endDate.split('T')[0] : '';
+      const delayDatePart = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      const effectiveEnd = delayDatePart || endDatePart;
+      if (endHasTime) return 5;
+      if (effectiveEnd && _todayRef.value > effectiveEnd) return 5;
+      const startPart = j.startDate ? j.startDate.split('T')[0] : '';
+      if (startPart && _todayRef.value >= startPart) return 3;
+      if (j.arrival_date) return 3;
+      if (j.bd_number) return 2;
+      return 1;
+    }
+    function getJobStageState(j, i) {
+      const si = getJobStageIdx(j);
+      const step = STAGES[i];
+      if (i > si) return 'pending';
+      if (i === si) return 'active';
+      if (step.key === 'connected') {
+        if (!j.bd_number) return 'warn';
+        if (j.bd_number && !bdBatches.value[j.bd_number]) return 'warn';
+        return 'done';
+      }
+      if (step.key === 'arrived') return j.arrival_date ? 'done' : 'warn';
+      if (step.key === 'started') {
+        const sp = j.startDate ? j.startDate.split('T')[0] : '';
+        return (sp && _todayRef.value >= sp) ? 'done' : 'current';
+      }
+      if (step.key === 'completed') {
+        const ep = j.endDate ? j.endDate.split('T')[0] : '';
+        const dp = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+        const effectiveEnd = dp || ep;
+        if (j.endDate && j.endDate.includes('T')) return 'done';
+        if (effectiveEnd && _todayRef.value > effectiveEnd) return 'done';
+        return 'current';
+      }
+      return 'done';
+    }
+
     // ─── CAPACITY FORM ───
     const capForm = reactive({ title: '', ruleType: 'default', custType: 'uv', quantity: 100, month: '', startDate: '', endDate: '' });
     const canSubmitCapacity = computed(() => {
@@ -1630,6 +1734,7 @@ export default {
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
       startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
+      blFrom, blTo, filteredBookings, getJobStageState,
       capForm, canSubmitCapacity, submitCapacity, emitCapacityDelete,
       fmtDate, statusKey, getTeammateName, rootCssVars,
     };
@@ -1933,6 +2038,34 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-milestone-row { display: flex; align-items: center; gap: 8px; }
 .milestone-label { min-width: 110px; }
 .milestone-pending { color: $amber; font-style: italic; font-size: 11px; }
+
+// ─── BOOKINGS LIST ───
+.bl-filters { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.bl-count { margin-left: auto; font-size: 10px; color: $gray-400; font-weight: 600; }
+.bl-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
+.bl-card {
+  background: #fff; border: 1px solid $gray-200; border-radius: 4px; padding: 7px 9px; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:hover { border-color: $blue; }
+}
+.bl-card--selected { border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.15); background: rgba($blue, 0.02); }
+.bl-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.bl-card-title { font-size: 11px; font-weight: 700; color: $gray-800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.bl-card-qty { font-size: 10px; font-weight: 600; color: $gray-500; margin-left: auto; &::before { content: '×'; } }
+.bl-card-pic { font-size: 9px; color: $gray-400; font-weight: 500; }
+.bl-card-dates { display: flex; align-items: center; gap: 8px; font-size: 10px; color: $gray-500; margin-bottom: 5px; }
+.bl-card-delay { color: $amber; font-weight: 600; }
+.bl-card-bd { color: $gray-400; font-weight: 600; font-family: monospace; font-size: 9px; }
+.bl-tl-track { display: flex; align-items: center; gap: 0; padding: 2px 0; }
+.bl-tl-step { display: flex; align-items: center; }
+.bl-tl-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid $gray-300; background: #fff; flex-shrink: 0; }
+.bl-tl-line { width: 16px; height: 1.5px; background: $gray-200; flex-shrink: 0; }
+.bl-tl-line--done { background: $green; }
+.bl-tl--done .bl-tl-dot { background: $green; border-color: $green; }
+.bl-tl--warn .bl-tl-dot { background: $amber; border-color: $amber; }
+.bl-tl--active .bl-tl-dot { background: $blue; border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.2); }
+.bl-tl--current .bl-tl-dot { background: $gray-800; border-color: $gray-800; }
+.bl-tl--pending .bl-tl-dot { background: #fff; border-color: $gray-300; }
 
 // ─── CAPACITY LIST ───
 .cal-cap-list { display: flex; flex-direction: column; gap: 3px; }
