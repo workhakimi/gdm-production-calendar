@@ -101,7 +101,8 @@
               <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step"
                 :class="[
                   'tl-step--' + stageStates[i],
-                  { 'tl-step--picked': activeStageIdx === i && activeStageIdx !== jobStageIndex }
+                  { 'tl-step--picked': activeStageIdx === i && activeStageIdx !== jobStageIndex,
+                    'tl-step--focus': activeStageIdx === i }
                 ]"
                 @click="selectStage(i)"
               >
@@ -1343,6 +1344,10 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 }
 .tl-step {
   display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0;
+  padding: 4px 6px; border-radius: 4px; margin: -4px -2px; transition: background 0.15s;
+}
+.tl-step--focus {
+  background: $gray-100;
 }
 .tl-bar {
   display: flex; align-items: center; width: 100%; height: 12px;
