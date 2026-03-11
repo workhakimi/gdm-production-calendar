@@ -19,7 +19,7 @@ export default {
     {
       name: 'onJobCreate',
       label: { en: 'On job create' },
-      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '' } },
+      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', bd_number: '', pic_id: '', batch_key: '', line_ids: [] } },
       default: true,
     },
     {

@@ -1328,14 +1328,16 @@ export default {
     function submitDraft() {
       if (!canSubmitDraft.value) return;
       const endDate = draftEndDateRaw.value;
+      const bdOpt = draftJob.bd_number ? bdOptions.value.find(o => o.bd_number === draftJob.bd_number) : null;
       emit('trigger-event', {
         name: 'onJobCreate',
-        event: { value: { title: draftJob.title || null, type: draftJob.type || 'uv', quantity: draftJob.quantity, startDate: draftJob.startDate || null, endDate: endDate || null, bd_number: draftJob.bd_number || null, pic_id: draftJob.pic_id || null } },
+        event: { value: {
+          title: draftJob.title || null, type: draftJob.type || 'uv', quantity: draftJob.quantity,
+          startDate: draftJob.startDate || null, endDate: endDate || null,
+          bd_number: draftJob.bd_number || null, pic_id: draftJob.pic_id || null,
+          batch_key: bdOpt?.batch_key || null, line_ids: bdOpt?.line_ids || [],
+        } },
       });
-      if (draftJob.bd_number) {
-        const opt = bdOptions.value.find(o => o.bd_number === draftJob.bd_number);
-        if (opt) emit('trigger-event', { name: 'onJobConnectBd', event: { value: { jobId: null, bd_number: draftJob.bd_number, batch_key: opt.batch_key, line_ids: opt.line_ids } } });
-      }
       cancelDraft();
     }
 
