@@ -612,7 +612,7 @@ export default {
         return { id: '__draft__', title: rescheduleJob.title || 'Reschedule', type: rescheduleJob.type, quantity: rescheduleJob.quantity, startDate: rescheduleJob.startDate, _maxDays: rescheduleJob._maxDays };
       }
       if (editMode.value && editForm.startDate && editForm.quantity > 0) {
-        return { id: '__draft__', title: editForm.title || 'Edit', type: editForm.type, quantity: editForm.quantity, startDate: editForm.startDate, _maxDays: 0 };
+        return { id: '__draft__', title: editForm.title || 'Edit', type: editForm.type, quantity: editForm.quantity, startDate: editForm.startDate, _maxDays: editForm._maxDays };
       }
       return null;
     });
