@@ -105,6 +105,7 @@
             Click a job on the calendar to view details.
           </div>
           <template v-else>
+            <!-- Job Details -->
             <div class="cal-detail-grid">
               <div class="edit-field">
                 <span class="edit-label">Title</span>
@@ -132,20 +133,73 @@
                 <span class="edit-label">Status</span>
                 <span class="edit-value">{{ selectedJobData.status || 'Active' }}</span>
               </div>
-            </div>
-
-            <div class="section-heading">Milestones</div>
-            <div class="cal-milestones">
-              <div v-for="ms in MILESTONE_TYPES" :key="ms.key" class="cal-milestone-row">
-                <span class="edit-label milestone-label">{{ ms.label }}</span>
-                <input
-                  type="date"
-                  class="edit-input milestone-input"
-                  :value="milestoneValues[ms.key] || ''"
-                  @change="handleMilestoneChange(ms.key, $event.target.value)"
-                />
+              <div class="edit-field">
+                <span class="edit-label">BD Number</span>
+                <span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span>
               </div>
             </div>
+
+            <!-- Milestones (display only) -->
+            <div class="section-heading">Milestones</div>
+            <div class="cal-milestones">
+              <div class="cal-milestone-row">
+                <span class="edit-label milestone-label">Job Created</span>
+                <span class="edit-value">{{ formatDateDisplay(selectedJobData.created_at) || '–' }}</span>
+              </div>
+              <div class="cal-milestone-row">
+                <span class="edit-label milestone-label">Arrival Date</span>
+                <span class="edit-value" :class="{ 'milestone-pending': !selectedJobData.arrival_date }">
+                  {{ selectedJobData.arrival_date ? formatDateDisplay(selectedJobData.arrival_date) : 'Pending' }}
+                </span>
+              </div>
+              <div class="cal-milestone-row">
+                <span class="edit-label milestone-label">Checkout Date</span>
+                <span class="edit-value" :class="{ 'milestone-pending': !selectedJobData.checkout_date }">
+                  {{ selectedJobData.checkout_date ? formatDateDisplay(selectedJobData.checkout_date) : 'Pending' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- BD Batch Details -->
+            <template v-if="selectedBdBatch">
+              <div class="section-heading">Order Details ({{ selectedJobData.bd_number }})</div>
+              <div class="bd-batch-card">
+                <div class="bd-batch-header">
+                  <span class="bd-batch-opid">{{ selectedBdBatch.opid }}</span>
+                  <span class="bd-batch-title">{{ selectedBdBatch.opTitle }}</span>
+                  <span class="bd-batch-cust type-tag" :class="'type-tag--' + (selectedBdBatch.custCategory || 'uv')">
+                    {{ selectedBdBatch.customization }}
+                  </span>
+                </div>
+                <div class="bd-batch-table-scroll">
+                  <table class="bd-batch-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Model</th>
+                        <th>Color</th>
+                        <th>Qty</th>
+                        <th>Status</th>
+                        <th>Mockup</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in selectedBdBatch.items" :key="item.lineId">
+                        <td class="td-sku">{{ item.sku }}</td>
+                        <td>{{ item.model }}</td>
+                        <td>{{ item.color }}</td>
+                        <td class="td-qty">{{ item.qty }}</td>
+                        <td><span class="status-pill" :class="'pill--' + statusKey(item.status)">{{ item.status }}</span></td>
+                        <td>
+                          <a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a>
+                          <span v-else class="td-empty">–</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
 
             <div class="cal-detail-actions">
               <button class="btn-action btn-action--danger" @click="emitJobDelete">Delete Job</button>
@@ -183,7 +237,79 @@
               <label class="edit-label">Days Required</label>
               <span class="cal-computed-value">{{ draftDaysRequired }}</span>
             </div>
+            <!-- BD Number Dropdown -->
+            <div class="edit-field edit-field--wide">
+              <label class="edit-label">BD Number (optional)</label>
+              <div class="bd-select-wrapper">
+                <input
+                  class="edit-input bd-search-input"
+                  v-model="bdSearch"
+                  placeholder="Search BD#..."
+                  @focus="bdDropdownOpen = true"
+                  @blur="closeBdDropdown"
+                />
+                <div v-if="bdDropdownOpen && filteredBdOptions.length" class="bd-dropdown">
+                  <div
+                    v-for="opt in filteredBdOptions"
+                    :key="opt.bd_number"
+                    class="bd-dropdown-item"
+                    :class="{ 'bd-dropdown-item--selected': draftJob.bd_number === opt.bd_number }"
+                    @mousedown.prevent="selectBdNumber(opt)"
+                  >
+                    <span class="bd-opt-num">{{ opt.bd_number }}</span>
+                    <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
+                    <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
+                  </div>
+                </div>
+              </div>
+              <span v-if="draftJob.bd_number" class="bd-selected-tag">
+                {{ draftJob.bd_number }}
+                <button class="bd-clear-btn" @click="clearDraftBd">×</button>
+              </span>
+            </div>
           </div>
+
+          <!-- BD Preview when selected -->
+          <template v-if="draftBdBatch">
+            <div class="section-heading">BD Preview ({{ draftJob.bd_number }})</div>
+            <div class="bd-batch-card">
+              <div class="bd-batch-header">
+                <span class="bd-batch-opid">{{ draftBdBatch.opid }}</span>
+                <span class="bd-batch-title">{{ draftBdBatch.opTitle }}</span>
+                <span class="bd-batch-cust type-tag" :class="'type-tag--' + (draftBdBatch.custCategory || 'uv')">
+                  {{ draftBdBatch.customization }}
+                </span>
+              </div>
+              <div class="bd-batch-table-scroll">
+                <table class="bd-batch-table">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Model</th>
+                      <th>Color</th>
+                      <th>Qty</th>
+                      <th>Status</th>
+                      <th>Mockup</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in draftBdBatch.items" :key="item.lineId">
+                      <td class="td-sku">{{ item.sku }}</td>
+                      <td>{{ item.model }}</td>
+                      <td>{{ item.color }}</td>
+                      <td class="td-qty">{{ item.qty }}</td>
+                      <td><span class="status-pill" :class="'pill--' + statusKey(item.status)">{{ item.status }}</span></td>
+                      <td>
+                        <a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a>
+                        <span v-else class="td-empty">–</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+
           <div class="cal-draft-hint" v-if="draftJob.startDate">
             Drag the preview bar on the calendar to change start date. Resize edges to spread over more days.
           </div>
@@ -276,11 +402,6 @@ const TABS = [
   { key: 'new', label: 'New Job' },
   { key: 'capacity', label: 'Manage Capacity' },
 ];
-const MILESTONE_TYPES = [
-  { key: 'job_created', label: 'Job Created' },
-  { key: 'stock_arrived', label: 'Stock Arrived' },
-  { key: 'production_start', label: 'Production Start' },
-];
 
 // ─── Date Utilities ───
 function parseDate(str) {
@@ -300,17 +421,6 @@ function nextDay(d) {
   n.setDate(n.getDate() + 1);
   return n;
 }
-function nextWorkday(d) {
-  let c = nextDay(d);
-  while (isWeekend(c)) c = nextDay(c);
-  return c;
-}
-function prevWorkday(d) {
-  let c = new Date(d);
-  c.setDate(c.getDate() - 1);
-  while (isWeekend(c)) c.setDate(c.getDate() - 1);
-  return c;
-}
 function countWorkdays(from, to) {
   let count = 0;
   let c = new Date(from);
@@ -321,9 +431,11 @@ function countWorkdays(from, to) {
   return count;
 }
 function formatDateNice(str) {
-  if (!str) return '–';
-  const d = parseDate(str);
-  if (!d) return '–';
+  if (!str) return '';
+  // Handle ISO datetime strings (trim time)
+  const dateOnly = str.length > 10 ? str.substring(0, 10) : str;
+  const d = parseDate(dateOnly);
+  if (!d) return '';
   return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
@@ -353,6 +465,97 @@ export default {
     const defaultUvCap = computed(() => props.content?.defaultUvCapacity ?? 100);
     const defaultLaserCap = computed(() => props.content?.defaultLaserCapacity ?? 50);
 
+    // Order plan & booking data resolution
+    const resolvedOpHeaders = computed(() => {
+      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.orderplanHeadersData);
+      return Array.isArray(raw) ? raw : [];
+    });
+    const resolvedOpLines = computed(() => {
+      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.orderplanLinesData);
+      return Array.isArray(raw) ? raw : [];
+    });
+    const resolvedBookingItems = computed(() => {
+      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.bookingItems);
+      return Array.isArray(raw) ? raw : [];
+    });
+    const resolvedInventoryData = computed(() => {
+      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.inventoryData);
+      return Array.isArray(raw) ? raw : [];
+    });
+
+    // ─── LOOKUP MAPS ───
+    const opHeaderLookup = computed(() => {
+      const map = {};
+      for (const h of resolvedOpHeaders.value) map[h.id] = h;
+      return map;
+    });
+    const bookingItemLookup = computed(() => {
+      const map = {};
+      for (const bi of resolvedBookingItems.value) map[bi.id] = bi;
+      return map;
+    });
+    const inventoryLookup = computed(() => {
+      const map = {};
+      for (const inv of resolvedInventoryData.value) map[inv.sku] = inv;
+      return map;
+    });
+
+    // ─── BD NUMBER BATCHES ───
+    // Group orderplan lines by bd_number → { bd_number, customization, headerid, opid, opTitle, items[] }
+    const bdBatches = computed(() => {
+      const batchMap = {};
+      for (const line of resolvedOpLines.value) {
+        const bd = line.bd_number;
+        if (!bd) continue;
+        if (!batchMap[bd]) {
+          const header = opHeaderLookup.value[line.headerid];
+          // Determine if UV or Laser category
+          const cust = line.customization || 'None';
+          const custLower = cust.toLowerCase();
+          const custCategory = custLower.includes('laser') || custLower.includes('deboss') ? 'laser' : 'uv';
+          batchMap[bd] = {
+            bd_number: bd,
+            customization: cust,
+            custCategory,
+            headerid: line.headerid,
+            opid: header?.opid || '–',
+            opTitle: header?.title || '–',
+            line_ids: [],
+            items: [],
+          };
+        }
+        const batch = batchMap[bd];
+        batch.line_ids.push(line.id);
+
+        const bi = bookingItemLookup.value[line.bookingitems_headerid];
+        const inv = bi ? inventoryLookup.value[bi.sku] : null;
+        batch.items.push({
+          lineId: line.id,
+          sku: bi?.sku || '–',
+          model: inv?.model || '–',
+          color: inv?.color || '–',
+          qty: line.quantity_assigned || 0,
+          status: bi?.status || 'Booked',
+          mockupLink: line.mockup_link || '',
+        });
+      }
+      return batchMap;
+    });
+
+    // Unique BD number options for dropdown
+    const bdOptions = computed(() => {
+      return Object.values(bdBatches.value).map(b => ({
+        bd_number: b.bd_number,
+        customization: b.customization,
+        custCategory: b.custCategory,
+        opid: b.opid,
+        opTitle: b.opTitle,
+        itemCount: b.items.length,
+        batch_key: `${b.headerid}::${b.customization}`,
+        line_ids: b.line_ids,
+      }));
+    });
+
     // ─── NAV STATE ───
     const now = new Date();
     const todayStr = toDateStr(now);
@@ -367,9 +570,7 @@ export default {
     // ─── CALENDAR DAYS ───
     const calendarDays = computed(() => {
       const first = new Date(currentYear.value, currentMonth.value, 1);
-      // Monday = 1, find offset. JS getDay: 0=Sun, 1=Mon...6=Sat
       let startDow = first.getDay();
-      // Convert to Mon=0 system: Mon=0, Tue=1, ..., Sun=6
       startDow = (startDow + 6) % 7;
       const startDate = new Date(first);
       startDate.setDate(startDate.getDate() - startDow);
@@ -448,7 +649,6 @@ export default {
         if (!current) continue;
 
         const maxDays = job._maxDays || 0;
-        const totalQty = remaining;
         let dayCount = 0;
         let safety = 0;
 
@@ -467,7 +667,6 @@ export default {
             dayCount++;
             let todayAlloc;
             if (maxDays > 0 && dayCount <= maxDays) {
-              // Spread evenly: allocate ceil of remaining / remaining days
               const remainingDays = maxDays - dayCount + 1;
               todayAlloc = Math.min(available, Math.ceil(remaining / remainingDays));
             } else {
@@ -476,14 +675,11 @@ export default {
             if (!allocMap[ds]) allocMap[ds] = [];
             allocMap[ds].push({ jobId: job.id || '__draft__', type: job.type || 'uv', qty: todayAlloc, title: job.title || '' });
             remaining -= todayAlloc;
-          } else if (totalCap === 0) {
-            // Skip zero-capacity days
           }
 
           current = nextDay(current);
         }
 
-        // Find end date
         let endDate = job.startDate;
         for (const ds in allocMap) {
           if ((allocMap[ds] || []).some(a => a.jobId === (job.id || '__draft__'))) {
@@ -496,7 +692,6 @@ export default {
       return { allocMap, jobEndDates };
     }
 
-    // Base allocations (existing jobs only)
     const baseResult = computed(() => allocateJobs(resolvedJobs.value, null));
 
     // ─── DRAFT JOB STATE ───
@@ -506,8 +701,42 @@ export default {
       quantity: 100,
       startDate: '',
       _maxDays: 0,
+      bd_number: '',
     });
     const isDrafting = computed(() => activeTab.value === 'new');
+
+    // BD search/dropdown state
+    const bdSearch = ref('');
+    const bdDropdownOpen = ref(false);
+
+    const filteredBdOptions = computed(() => {
+      const q = bdSearch.value.toLowerCase().trim();
+      if (!q) return bdOptions.value;
+      return bdOptions.value.filter(o =>
+        o.bd_number.toLowerCase().includes(q) ||
+        o.opid.toLowerCase().includes(q) ||
+        o.opTitle.toLowerCase().includes(q)
+      );
+    });
+
+    function selectBdNumber(opt) {
+      draftJob.bd_number = opt.bd_number;
+      bdSearch.value = opt.bd_number;
+      bdDropdownOpen.value = false;
+    }
+    function clearDraftBd() {
+      draftJob.bd_number = '';
+      bdSearch.value = '';
+    }
+    function closeBdDropdown() {
+      setTimeout(() => { bdDropdownOpen.value = false; }, 150);
+    }
+
+    // Draft BD batch preview
+    const draftBdBatch = computed(() => {
+      if (!draftJob.bd_number) return null;
+      return bdBatches.value[draftJob.bd_number] || null;
+    });
 
     // Full allocations (existing + draft if applicable)
     const fullResult = computed(() => {
@@ -545,12 +774,7 @@ export default {
     const allSegments = computed(() => {
       const allocMap = allAllocations.value;
       const days = calendarDays.value;
-      const dateToPos = {};
-      for (const day of days) {
-        dateToPos[day.dateStr] = { weekIndex: day.weekIndex, dayIndex: day.dayIndex };
-      }
 
-      // Collect all job IDs that have allocations in visible range
       const jobSet = new Map();
       for (const day of days) {
         const allocs = allocMap[day.dateStr] || [];
@@ -569,14 +793,10 @@ export default {
         }
       }
 
-      // For each job, find which visible days it occupies, group into continuous weekday runs per week row
       const segments = [];
       let segIdx = 0;
+      const weekRows = {};
 
-      // Row stacking: track used rows per week
-      const weekRows = {}; // weekIndex -> array of { startCol, endCol, rowIdx }
-
-      // Sort jobs: existing first (by start date), draft last
       const jobIds = [...jobSet.keys()].sort((a, b) => {
         if (a === '__draft__') return 1;
         if (b === '__draft__') return -1;
@@ -585,7 +805,6 @@ export default {
 
       for (const jobId of jobIds) {
         const jobInfo = jobSet.get(jobId);
-        // Find all visible day positions for this job
         const positions = [];
         for (const day of days) {
           const allocs = allocMap[day.dateStr] || [];
@@ -602,12 +821,10 @@ export default {
 
         if (!positions.length) continue;
 
-        // Group into continuous runs within same week
         const runs = [];
         let currentRun = null;
         for (const pos of positions) {
           if (!currentRun || pos.weekIndex !== currentRun.weekIndex || pos.dayIndex !== currentRun.endCol + 1) {
-            // Check for weekend gap within same week (e.g., Fri -> next week Mon is different weekIndex)
             if (currentRun) runs.push(currentRun);
             currentRun = {
               weekIndex: pos.weekIndex,
@@ -622,7 +839,6 @@ export default {
         }
         if (currentRun) runs.push(currentRun);
 
-        // Assign row indices per week (greedy stacking)
         for (const run of runs) {
           if (!weekRows[run.weekIndex]) weekRows[run.weekIndex] = [];
           let rowIdx = 0;
@@ -718,26 +934,17 @@ export default {
       return resolvedJobs.value.find(j => j.id === selectedJobId.value) || null;
     });
 
-    const milestoneValues = reactive({});
+    // Selected job's BD batch details
+    const selectedBdBatch = computed(() => {
+      if (!selectedJobData.value?.bd_number) return null;
+      return bdBatches.value[selectedJobData.value.bd_number] || null;
+    });
 
     function selectJob(jobId, isDraft) {
       if (isDraft) return;
       selectedJobId.value = jobId;
       activeTab.value = 'manage';
-      const job = resolvedJobs.value.find(j => j.id === jobId);
-      // Load milestones
-      for (const ms of MILESTONE_TYPES) {
-        milestoneValues[ms.key] = job?.milestones?.[ms.key] || '';
-      }
       emit('trigger-event', { name: 'onJobSelect', event: { value: { jobId } } });
-    }
-
-    function handleMilestoneChange(key, value) {
-      milestoneValues[key] = value;
-      emit('trigger-event', {
-        name: 'onMilestoneUpdate',
-        event: { value: { jobId: selectedJobId.value, milestoneType: key, date: value } },
-      });
     }
 
     function emitJobDelete() {
@@ -749,26 +956,22 @@ export default {
     function switchTab(key) {
       activeTab.value = key;
       if (key === 'new' && !draftJob.startDate) {
-        // Default to next workday
         let d = new Date();
         while (isWeekend(d)) d = nextDay(d);
         draftJob.startDate = toDateStr(d);
-      }
-      if (key !== 'manage') {
-        // Don't clear selection automatically
       }
     }
 
     // ─── DRAFT JOB METHODS ───
     function cancelDraft() {
-      Object.assign(draftJob, { title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0 });
+      Object.assign(draftJob, { title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0, bd_number: '' });
+      bdSearch.value = '';
       activeTab.value = 'manage';
     }
 
     function submitDraft() {
       if (!canSubmitDraft.value) return;
       const endDate = draftEndDateRaw.value;
-      // Build daily allocation
       const dailyAllocation = [];
       const allocMap = allAllocations.value;
       for (const ds in allocMap) {
@@ -789,16 +992,36 @@ export default {
             startDate: draftJob.startDate,
             endDate,
             dailyAllocation,
+            bd_number: draftJob.bd_number || '',
           },
         },
       });
+
+      // If BD was connected, also emit the connect event
+      if (draftJob.bd_number) {
+        const opt = bdOptions.value.find(o => o.bd_number === draftJob.bd_number);
+        if (opt) {
+          emit('trigger-event', {
+            name: 'onJobConnectBd',
+            event: {
+              value: {
+                jobId: null, // Will be set after creation on backend
+                bd_number: draftJob.bd_number,
+                batch_key: opt.batch_key,
+                line_ids: opt.line_ids,
+              },
+            },
+          });
+        }
+      }
+
       cancelDraft();
     }
 
     // ─── DRAG & DROP ───
     const dragState = reactive({
       active: false,
-      mode: null, // 'move' | 'resize-left' | 'resize-right'
+      mode: null,
       origStartDate: '',
       origMaxDays: 0,
     });
@@ -823,14 +1046,11 @@ export default {
       event.preventDefault();
     }
 
-    function handleDayHover(day) {
-      // Visual feedback only during drag
-    }
+    function handleDayHover() {}
 
     function handleDayMousedown(event, day) {
       if (!isDrafting.value) return;
       if (day.isWeekend || day.outside) return;
-      // Clicking a day sets the start date for new job
       draftJob.startDate = day.dateStr;
     }
 
@@ -847,21 +1067,17 @@ export default {
 
       if (dragState.mode === 'move') {
         draftJob.startDate = dateStr;
-        draftJob._maxDays = 0; // Reset spread when moving
+        draftJob._maxDays = 0;
       } else if (dragState.mode === 'resize-right') {
-        // Extend end: compute workdays between start and this date
         const start = parseDate(draftJob.startDate);
         if (dateStr >= draftJob.startDate) {
           const wd = countWorkdays(start, d);
-          // Minimum days = what's needed at max capacity
           const minDays = computeMinDays(draftJob.quantity, draftJob.type, draftJob.startDate);
           draftJob._maxDays = Math.max(wd, minDays);
         }
       } else if (dragState.mode === 'resize-left') {
-        // Move start date earlier/later
         if (dateStr <= draftEndDateRaw.value) {
           draftJob.startDate = dateStr;
-          // Recompute max days to maintain same end
           const end = parseDate(draftEndDateRaw.value);
           if (end) {
             const wd = countWorkdays(d, end);
@@ -879,7 +1095,6 @@ export default {
     }
 
     function computeMinDays(quantity, type, startDate) {
-      // Minimum days needed if filling to max capacity each day
       let remaining = quantity;
       let current = parseDate(startDate);
       if (!current) return 1;
@@ -890,7 +1105,6 @@ export default {
         if (isWeekend(current)) { current = nextDay(current); continue; }
         const ds = toDateStr(current);
         const totalCap = getCapacityForDate(ds, type);
-        // For min days, assume only existing jobs, not the draft itself
         const used = (baseResult.value.allocMap[ds] || [])
           .filter(a => a.type === type)
           .reduce((s, a) => s + a.qty, 0);
@@ -904,7 +1118,6 @@ export default {
       return Math.max(1, days);
     }
 
-    // Cleanup
     onBeforeUnmount(() => {
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
@@ -950,8 +1163,12 @@ export default {
       emit('trigger-event', { name: 'onCapacityDelete', event: { value: { capacityId } } });
     }
 
-    // ─── FORMATTING ───
+    // ─── HELPERS ───
     function formatDateDisplay(str) { return formatDateNice(str); }
+    function statusKey(status) {
+      if (!status) return 'booked';
+      return status.toLowerCase().replace(/\s+/g, '-');
+    }
 
     // ─── CSS VARS ───
     const rootCssVars = computed(() => ({
@@ -965,7 +1182,7 @@ export default {
 
     return {
       // Constants
-      DOW, TABS, MILESTONE_TYPES,
+      DOW, TABS,
       // State
       currentMonth, currentYear, monthLabel, activeTab, selectedJobId,
       gridRef,
@@ -979,23 +1196,25 @@ export default {
       allAllocations, allSegments,
       // Segments
       segmentStyle, jobsLayerStyle,
-      JOB_BAR_HEIGHT, JOB_BAR_GAP,
       // Navigation
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       // Selection
-      selectedJobData, milestoneValues,
-      selectJob, handleMilestoneChange, emitJobDelete,
+      selectedJobData, selectedBdBatch,
+      selectJob, emitJobDelete,
       // Draft
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
+      // BD search
+      bdSearch, bdDropdownOpen, filteredBdOptions, draftBdBatch,
+      selectBdNumber, clearDraftBd, closeBdDropdown,
       // Drag
       dragState,
       handleJobMousedown, handleResizeStart,
       handleDayHover, handleDayMousedown,
       // Capacity form
       capForm, canSubmitCapacity, submitCapacity, emitCapacityDelete,
-      // Formatting
-      formatDateDisplay,
+      // Helpers
+      formatDateDisplay, statusKey,
       // CSS
       rootCssVars,
     };
@@ -1263,7 +1482,7 @@ $white: #ffffff;
   background: $white;
   border-top: 2px solid $gray-200;
   min-height: 120px;
-  max-height: 320px;
+  max-height: 360px;
   display: flex;
   flex-direction: column;
 }
@@ -1316,13 +1535,16 @@ $white: #ffffff;
 }
 .cal-detail-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px;
 }
 .edit-field {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.edit-field--wide {
+  grid-column: 1 / -1;
 }
 .edit-label {
   font-size: 9px;
@@ -1482,14 +1704,192 @@ $white: #ffffff;
 .milestone-label {
   min-width: 110px;
 }
-.milestone-input {
-  max-width: 160px;
+.milestone-pending {
+  color: $amber;
+  font-style: italic;
+  font-size: 11px;
 }
 
 .cal-detail-actions {
   margin-top: 12px;
   display: flex;
   gap: 8px;
+}
+
+// ─── BD NUMBER DROPDOWN ───
+.bd-select-wrapper {
+  position: relative;
+}
+.bd-search-input {
+  width: 100%;
+}
+.bd-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: $white;
+  border: 1px solid $gray-300;
+  border-top: none;
+  border-radius: 0 0 3px 3px;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.bd-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.08s;
+  &:hover { background: $gray-50; }
+}
+.bd-dropdown-item--selected {
+  background: $blue-50;
+}
+.bd-opt-num {
+  font-weight: 700;
+  color: $gray-800;
+  min-width: 60px;
+}
+.bd-opt-meta {
+  color: $gray-500;
+  font-size: 10px;
+  margin-left: auto;
+}
+.bd-selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  background: $blue-50;
+  color: $blue;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 3px;
+}
+.bd-clear-btn {
+  background: none;
+  border: none;
+  color: $blue;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  &:hover { color: $red; }
+}
+
+// ─── BD BATCH CARD ───
+.bd-batch-card {
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.bd-batch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: $gray-50;
+  border-bottom: 1px solid $gray-200;
+  font-size: 11px;
+}
+.bd-batch-opid {
+  font-weight: 700;
+  color: $gray-800;
+  background: $gray-200;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+.bd-batch-title {
+  font-weight: 500;
+  color: $gray-700;
+  flex: 1;
+}
+.bd-batch-table-scroll {
+  overflow-x: auto;
+}
+.bd-batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  th {
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $gray-400;
+    background: $gray-50;
+    border-bottom: 1px solid $gray-200;
+    white-space: nowrap;
+  }
+  td {
+    padding: 4px 8px;
+    border-bottom: 1px solid $gray-100;
+    color: $gray-700;
+    white-space: nowrap;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
+.td-sku {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 10px;
+  color: $gray-800;
+}
+.td-qty {
+  font-weight: 600;
+  text-align: center;
+}
+.td-empty {
+  color: $gray-300;
+}
+
+// ─── STATUS PILLS ───
+.status-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.pill--booked {
+  color: $blue;
+  background: $blue-50;
+}
+.pill--issue-raised {
+  color: $red;
+  background: $red-50;
+}
+.pill--processing {
+  color: $amber;
+  background: $amber-50;
+}
+.pill--delivered {
+  color: $green;
+  background: $green-50;
+}
+
+// ─── MOCKUP LINK ───
+.mockup-link {
+  color: $blue;
+  font-size: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
 }
 
 // ─── CAPACITY LIST ───

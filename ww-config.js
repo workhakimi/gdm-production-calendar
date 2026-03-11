@@ -5,6 +5,9 @@ export default {
     customSettingsPropertiesOrder: [
       ['jobsData', 'capacityData'],
       ['defaultUvCapacity', 'defaultLaserCapacity'],
+      ['orderplanHeadersData', 'orderplanDeliveriesData', 'orderplanAttBookingsData', 'orderplanLinesData'],
+      ['bookingHeaders', 'bookingItems'],
+      ['inventoryData', 'teammatesList'],
       ['actionStatus'],
     ],
     customStylePropertiesOrder: [
@@ -16,7 +19,7 @@ export default {
     {
       name: 'onJobCreate',
       label: { en: 'On job create' },
-      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', dailyAllocation: [] } },
+      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', dailyAllocation: [], bd_number: '' } },
       default: true,
     },
     {
@@ -35,9 +38,9 @@ export default {
       event: { value: { jobId: null } },
     },
     {
-      name: 'onMilestoneUpdate',
-      label: { en: 'On milestone update' },
-      event: { value: { jobId: null, milestoneType: '', date: '' } },
+      name: 'onJobConnectBd',
+      label: { en: 'On job connect BD' },
+      event: { value: { jobId: null, bd_number: '', batch_key: '', line_ids: [] } },
     },
     {
       name: 'onCapacityCreate',
@@ -68,7 +71,7 @@ export default {
       bindable: true,
       defaultValue: [],
       bindingValidation: {
-        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, color, milestones }',
+        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, color, bd_number, status, created_at, arrival_date, checkout_date }',
       },
     },
     capacityData: {
@@ -94,6 +97,86 @@ export default {
       section: 'settings',
       bindable: true,
       defaultValue: 50,
+    },
+    orderplanHeadersData: {
+      label: { en: 'Order plan headers' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, opid, title, pic_bda, pic_ops, quoteref, invoiceref, status, created_at }',
+      },
+    },
+    orderplanDeliveriesData: {
+      label: { en: 'Order plan deliveries' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, headerid, label, deliverytype, address, remarks, pic_name, pic_phone, deadline }',
+      },
+    },
+    orderplanAttBookingsData: {
+      label: { en: 'Order plan attached bookings' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, headerid, booking_headerid }',
+      },
+    },
+    orderplanLinesData: {
+      label: { en: 'Order plan lines' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, headerid, bookingitems_headerid, deliveries_headerid, customization, quantity_assigned, labor, mockup_link, bd_number, do_folder }',
+      },
+    },
+    bookingHeaders: {
+      label: { en: 'Booking headers' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, bookingnumber, bookingtitle, pic_id, status, unique_skus, total_quantity, created_at }',
+      },
+    },
+    bookingItems: {
+      label: { en: 'Booking items' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, headerid, sku, quantity, status, balanceref, indicator }',
+      },
+    },
+    inventoryData: {
+      label: { en: 'Inventory data' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { sku, type, model, color, size, tags, snt, imagelink }',
+      },
+    },
+    teammatesList: {
+      label: { en: 'Teammates list' },
+      type: 'ObjectList',
+      section: 'settings',
+      bindable: true,
+      defaultValue: [],
+      bindingValidation: {
+        tooltip: 'Array of { id, name, type, email, phone }',
+      },
     },
     actionStatus: {
       label: { en: 'Action status' },
