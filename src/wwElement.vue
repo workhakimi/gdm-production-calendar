@@ -1134,7 +1134,7 @@ export default {
       }
       return tops;
     });
-    const gridRowHeights = computed(() => weekRowPx.value.map(h => `${h}px`).join(' '));
+    const gridRowHeights = computed(() => weekRowPx.value.map(h => `minmax(${h}px, ${h}fr)`).join(' '));
     const gridStyle = computed(() => ({
       gridTemplateRows: gridRowHeights.value,
     }));
