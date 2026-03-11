@@ -115,10 +115,17 @@
 
             <!-- ── STAGE ACTION PANEL ── -->
             <div class="stage-panel">
-              <!-- Stage 1: Connected — BD input -->
+              <!-- Stage 1: Connected — BD -->
               <template v-if="activeStageIdx === 1">
                 <div class="stage-action">
-                  <div class="stage-inline">
+                  <!-- Read-only: show current BD if already connected -->
+                  <div v-if="selectedJobData.bd_number && stageEditing !== 1" class="stage-inline">
+                    <span class="stage-inline-label">BD#</span>
+                    <span class="stage-inline-value">{{ selectedJobData.bd_number }}</span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(1)">Edit</button>
+                  </div>
+                  <!-- Edit mode: BD search input -->
+                  <div v-else class="stage-inline">
                     <span class="stage-inline-label">BD#</span>
                     <div class="bd-select-wrapper bd-select-wrapper--stage">
                       <input class="edit-input edit-input--sm" v-model="stageBdSearch" placeholder="Search..." @focus="stageBdOpen = true" @blur="closeStageBdDropdown" />
@@ -135,31 +142,44 @@
                       <button class="bd-pick-x" @click="clearStageBd">×</button>
                     </span>
                     <button class="btn-action btn-action--primary btn-sm" :disabled="!stageBdSelected" @click="submitStageBd">Connect</button>
+                    <button v-if="selectedJobData.bd_number" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
                 </div>
               </template>
 
-              <!-- Stage 2: Arrival — date input -->
+              <!-- Stage 2: Arrival -->
               <template v-if="activeStageIdx === 2">
                 <div class="stage-action">
-                  <div class="stage-inline">
+                  <div v-if="selectedJobData.arrival_date && stageEditing !== 2" class="stage-inline">
+                    <span class="stage-inline-label">Arrival</span>
+                    <span class="stage-inline-value">{{ fmtDate(selectedJobData.arrival_date) }}</span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(2)">Edit</button>
+                  </div>
+                  <div v-else class="stage-inline">
                     <span class="stage-inline-label">Arrival</span>
                     <input type="date" class="edit-input edit-input--sm" v-model="stageArrivalDate" />
                     <button class="btn-action btn-action--primary btn-sm" :disabled="!stageArrivalDate" @click="submitArrival">Set</button>
+                    <button v-if="selectedJobData.arrival_date" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
                 </div>
               </template>
 
-              <!-- Stage 3: Started / Pending Start + Manual Complete -->
+              <!-- Stage 3/4: Started / Complete -->
               <template v-if="activeStageIdx === 3 || activeStageIdx === 4">
                 <div class="stage-action">
-                  <div class="stage-inline">
+                  <div v-if="selectedJobData.completed_at && stageEditing !== 4" class="stage-inline">
+                    <span class="stage-inline-label">Completed</span>
+                    <span class="stage-inline-value">{{ fmtDate(selectedJobData.completed_at) }}</span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
+                  </div>
+                  <div v-else class="stage-inline">
                     <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
                     <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
                     <span class="stage-inline-sep"></span>
                     <button class="btn-action btn-action--muted btn-sm" @click="enterReschedule">Reschedule</button>
                     <input type="date" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
                     <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Complete</button>
+                    <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
                 </div>
               </template>
@@ -183,10 +203,16 @@
               <!-- Stage 5: Checkout -->
               <template v-if="activeStageIdx === 5">
                 <div class="stage-action">
-                  <div class="stage-inline">
+                  <div v-if="selectedJobData.checkout_date && stageEditing !== 5" class="stage-inline">
+                    <span class="stage-inline-label">Checkout</span>
+                    <span class="stage-inline-value">{{ fmtDate(selectedJobData.checkout_date) }}</span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(5)">Edit</button>
+                  </div>
+                  <div v-else class="stage-inline">
                     <span class="stage-inline-label">Checkout</span>
                     <input type="date" class="edit-input edit-input--sm" v-model="stageCheckoutDate" />
                     <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCheckoutDate" @click="submitCheckout">Set</button>
+                    <button v-if="selectedJobData.checkout_date" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
                   </div>
                 </div>
               </template>
@@ -713,9 +739,16 @@ export default {
       });
       stageBdSelected.value = null;
       stageBdSearch.value = '';
+      stageEditing.value = null;
     }
 
     // ─── STAGE ACTIONS ───
+    const stageEditing = ref(null); // which stage index is being edited (null = none)
+    function startStageEdit(idx) { stageEditing.value = idx; }
+    function cancelStageEdit() { stageEditing.value = null; stageBdSelected.value = null; stageBdSearch.value = ''; }
+    watch(selectedJobId, () => { stageEditing.value = null; });
+    watch(activeStageIdx, () => { stageEditing.value = null; });
+
     const stageArrivalDate = ref('');
     const stageCompleteDate = ref('');
     const stageCheckoutDate = ref('');
@@ -723,17 +756,17 @@ export default {
     function submitArrival() {
       if (!stageArrivalDate.value) return;
       emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: stageArrivalDate.value } } });
-      stageArrivalDate.value = '';
+      stageArrivalDate.value = ''; stageEditing.value = null;
     }
     function submitComplete() {
       if (!stageCompleteDate.value) return;
       emit('trigger-event', { name: 'onJobComplete', event: { value: { jobId: selectedJobId.value, completed_at: stageCompleteDate.value } } });
-      stageCompleteDate.value = '';
+      stageCompleteDate.value = ''; stageEditing.value = null;
     }
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
-      stageCheckoutDate.value = '';
+      stageCheckoutDate.value = ''; stageEditing.value = null;
     }
 
     // ─── RESCHEDULE ───
@@ -1170,6 +1203,7 @@ export default {
       bdSearch, bdDropdownOpen, filteredBdOptions, draftBdBatch, selectBdNumber, clearDraftBd, closeBdDropdown,
       picSearch, picDropdownOpen, filteredPicOptions, selectPic, clearDraftPic, closePicDropdown,
       stageBdSearch, stageBdOpen, stageBdSelected, filteredStageBdOptions, closeStageBdDropdown, selectStageBd, clearStageBd, submitStageBd,
+      stageEditing, startStageEdit, cancelStageEdit,
       stageArrivalDate, stageCompleteDate, stageCheckoutDate,
       submitArrival, submitComplete, submitCheckout,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
@@ -1317,6 +1351,9 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 }
 .stage-inline-label {
   font-size: 10px; font-weight: 700; color: $gray-500; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.stage-inline-value {
+  font-size: 11px; font-weight: 700; color: $gray-900; white-space: nowrap;
 }
 .stage-inline-hint {
   font-size: 10px; color: $gray-500; white-space: nowrap;
