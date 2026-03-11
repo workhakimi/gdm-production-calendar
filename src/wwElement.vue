@@ -127,6 +127,7 @@
                     <span class="stage-inline-label">BD#</span>
                     <span class="stage-inline-value">{{ selectedJobData.bd_number }}</span>
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(1)">Edit</button>
+                    <button class="btn-action btn-action--danger btn-sm" @click="removeBdConnection">Remove</button>
                   </div>
                   <!-- Edit mode: BD search input -->
                   <div v-else class="stage-inline">
@@ -832,6 +833,13 @@ export default {
       stageBdSelected.value = null;
       stageBdSearch.value = '';
       stageEditing.value = null;
+    }
+
+    function removeBdConnection() {
+      emit('trigger-event', {
+        name: 'onJobConnectBd',
+        event: { value: { jobId: selectedJobId.value, bd_number: null, batch_key: null, line_ids: [] } },
+      });
     }
 
     // ─── STAGE ACTIONS ───
@@ -1630,7 +1638,7 @@ export default {
       stageBdSearch, stageBdOpen, stageBdSelected, filteredStageBdOptions, closeStageBdDropdown, selectStageBd, clearStageBd, submitStageBd,
       stageEditing, startStageEdit, cancelStageEdit,
       stageArrivalDate, stageCheckoutDate,
-      submitArrival, submitCheckout, removeArrival, removeCheckout,
+      submitArrival, submitCheckout, removeArrival, removeCheckout, removeBdConnection,
       showEndTimeInput, endTimeOnly, endDateHasTime, setEndTime, removeEndTime, cancelEndTimeInput,
       showDelayEndTimeInput, delayEndTimeOnly, delayEndDateHasTime, setDelayEndTime, removeDelayEndTime, cancelDelayEndTimeInput,
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
