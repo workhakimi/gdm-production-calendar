@@ -101,7 +101,7 @@ export default {
       bindable: true,
       defaultValue: [],
       bindingValidation: {
-        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, endDate_delay, delay_reason, color, bd_number, pic_id, created_at, arrival_date, completed_at, checkout_date }',
+        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, endDate_delay, delay_reason, color, bd_number, pic_id, created_at, arrival_date, checkout_date }',
       },
     },
     capacityData: {

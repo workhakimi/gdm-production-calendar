@@ -61,7 +61,7 @@
             'cal-job--draft': seg.isDraft && !seg.isGap,
             'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
             'cal-job--faded': (isDrafting || isRescheduling || (editMode && editLosesPriority)) && !seg.isDraft
-              || (editMode && !editLosesPriority && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
+              || (editMode && !editLosesPriority && seg.jobId !== selectedJobId),
             'cal-job--gap': seg.isGap,
             'cal-job--delay': seg.isDelay,
           }"
@@ -183,8 +183,12 @@
               <!-- Stage 4: Complete -->
               <template v-if="activeStageIdx === 4">
                 <div class="stage-action">
+                  <!-- Job already ended — read-only summary -->
+                  <div v-if="jobStageIndex >= 5" class="stage-inline">
+                    <span class="stage-inline-hint stage-inline-hint--active">Job ended — {{ fmtDate(((selectedJobData.endDate_delay || selectedJobData.endDate || '').split('T')[0])) }}</span>
+                  </div>
                   <!-- ── DELAY EXISTS: show delay info + delay time controls ── -->
-                  <template v-if="selectedJobData.endDate_delay">
+                  <template v-else-if="selectedJobData.endDate_delay">
                     <div class="stage-inline">
                       <span class="stage-inline-hint">Computed end date — {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
                     </div>
@@ -623,7 +627,15 @@ export default {
 
     // ─── NAV STATE ───
     const now = new Date();
-    const todayStr = toDateStr(now);
+    const _todayRef = ref(toDateStr(now));
+    // Refresh at midnight so date comparisons stay current
+    let _midnightTimer = null;
+    function scheduleMidnightRefresh() {
+      const n = new Date(), tmrw = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+      const ms = tmrw.getTime() - n.getTime() + 1000;
+      _midnightTimer = setTimeout(() => { _todayRef.value = toDateStr(new Date()); scheduleMidnightRefresh(); }, ms);
+    }
+    scheduleMidnightRefresh();
     const currentMonth = ref(now.getMonth());
     const currentYear = ref(now.getFullYear());
     const activeTab = ref('manage');
@@ -642,7 +654,7 @@ export default {
         const ds = toDateStr(d), dow = d.getDay();
         days.push({
           date: new Date(d), dateStr: ds, dayNum: d.getDate(), monthShort: MONTH_SHORT[d.getMonth()],
-          isWeekend: dow === 0 || dow === 6, isToday: ds === todayStr,
+          isWeekend: dow === 0 || dow === 6, isToday: ds === _todayRef.value,
           outside: d.getMonth() !== currentMonth.value, weekIndex: Math.floor(i / 7), dayIndex: i % 7, idx: i,
         });
       }
@@ -702,8 +714,6 @@ export default {
       }
       return { allocMap: am, jobEndDates: ed };
     }
-
-    const baseResult = computed(() => allocateJobs(resolvedJobs.value, null));
 
     // ─── DRAFT JOB ───
     const draftJob = reactive({ title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0, bd_number: '', pic_id: '' });
@@ -848,21 +858,17 @@ export default {
     function cancelStageEdit() { stageEditing.value = null; stageBdSelected.value = null; stageBdSearch.value = ''; }
     // watches moved after activeStageIdx definition
 
-    const stageArrivalDate = ref('');
-    const stageCheckoutDate = ref(todayStr);
+    const stageArrivalDate = ref(_todayRef.value);
+    const stageCheckoutDate = ref(_todayRef.value);
 
     function submitArrival() {
       if (!stageArrivalDate.value) return;
       emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: stageArrivalDate.value } } });
-      stageArrivalDate.value = ''; stageEditing.value = null;
+      stageArrivalDate.value = _todayRef.value; stageEditing.value = null;
     }
     // ─── END TIME (stage 4) ───
     const showEndTimeInput = ref(false);
     const endTimeOnly = ref('');
-    const endDateHasTime = computed(() => {
-      const j = selectedJobData.value;
-      return j?.endDate && j.endDate.includes('T');
-    });
     function setEndTime() {
       const j = selectedJobData.value;
       if (!j || !endTimeOnly.value) return;
@@ -871,23 +877,11 @@ export default {
       emit('trigger-event', { name: 'onJobSetEndTime', event: { value: { jobId: selectedJobId.value, endDate: datePart + 'T' + endTimeOnly.value } } });
       endTimeOnly.value = ''; showEndTimeInput.value = false; stageEditing.value = null;
     }
-    function removeEndTime() {
-      const j = selectedJobData.value;
-      if (!j) return;
-      const datePart = (j.endDate || '').split('T')[0];
-      if (!datePart) return;
-      emit('trigger-event', { name: 'onJobSetEndTime', event: { value: { jobId: selectedJobId.value, endDate: datePart } } });
-      stageEditing.value = null;
-    }
     function cancelEndTimeInput() { showEndTimeInput.value = false; endTimeOnly.value = ''; stageEditing.value = null; }
 
     // ─── DELAY END TIME (stage 4, when delay exists) ───
     const showDelayEndTimeInput = ref(false);
     const delayEndTimeOnly = ref('');
-    const delayEndDateHasTime = computed(() => {
-      const j = selectedJobData.value;
-      return j?.endDate_delay && j.endDate_delay.includes('T');
-    });
     function setDelayEndTime() {
       const j = selectedJobData.value;
       if (!j || !delayEndTimeOnly.value) return;
@@ -895,14 +889,6 @@ export default {
       if (!datePart) return;
       emit('trigger-event', { name: 'onJobSetDelayEndTime', event: { value: { jobId: selectedJobId.value, endDate_delay: datePart + 'T' + delayEndTimeOnly.value } } });
       delayEndTimeOnly.value = ''; showDelayEndTimeInput.value = false; stageEditing.value = null;
-    }
-    function removeDelayEndTime() {
-      const j = selectedJobData.value;
-      if (!j) return;
-      const datePart = (j.endDate_delay || '').split('T')[0];
-      if (!datePart) return;
-      emit('trigger-event', { name: 'onJobSetDelayEndTime', event: { value: { jobId: selectedJobId.value, endDate_delay: datePart } } });
-      stageEditing.value = null;
     }
     function cancelDelayEndTimeInput() { showDelayEndTimeInput.value = false; delayEndTimeOnly.value = ''; stageEditing.value = null; }
 
@@ -930,7 +916,7 @@ export default {
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
-      stageCheckoutDate.value = todayStr; stageEditing.value = null;
+      stageCheckoutDate.value = _todayRef.value; stageEditing.value = null;
     }
     function removeArrival() {
       emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: null } } });
@@ -1072,7 +1058,7 @@ export default {
               const showLabel = curType === 'active' && (isJobFirst || (isNewWeek && firstActiveInWeek) || prevWasGap);
               segs.push({
                 key: `${jid}-${wi}-${curStart}-${curType}`, jobId: jid, title: ji.title, type: ji.type,
-                totalQty: ji.totalQty, color: curType === 'active' ? col : null, isGap: curType === 'gap',
+                totalQty: ji.totalQty, color: curType === 'active' ? col : null, isGap: curType === 'gap', isDelay: false,
                 isDraft: ji.isDraft, isFirst: isJobFirst, isLast: isJobLast, showLabel,
                 weekIndex: wi, startCol: curStart, endCol, rowIndex: ri,
               });
@@ -1246,9 +1232,9 @@ export default {
       const effectiveEnd = delayDatePart || endDatePart;
       // Completed: end date has time set (same-day completion) OR past effective end date
       if (endHasTime) return 5;
-      if (effectiveEnd && todayStr > effectiveEnd) return 5;
+      if (effectiveEnd && _todayRef.value > effectiveEnd) return 5;
       // In progress: today >= start date
-      if (j.startDate && todayStr >= j.startDate) return 3;
+      if (j.startDate && _todayRef.value >= j.startDate) return 3;
       // Arrival set moves to pending start
       if (j.arrival_date) return 3;
       if (j.bd_number) return 2;
@@ -1274,7 +1260,7 @@ export default {
           return 'done';
         }
         if (step.key === 'started') {
-          if (j.startDate && todayStr >= j.startDate) return 'done';
+          if (j.startDate && _todayRef.value >= j.startDate) return 'done';
           return 'current'; // arrival set but not yet started — black
         }
         if (step.key === 'completed') {
@@ -1282,7 +1268,7 @@ export default {
           const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
           const effectiveEnd = dp || ep;
           if (j?.endDate && j.endDate.includes('T')) return 'done';
-          if (effectiveEnd && todayStr > effectiveEnd) return 'done';
+          if (effectiveEnd && _todayRef.value > effectiveEnd) return 'done';
           return 'current'; // in progress but not ended — black
         }
         return 'done';
@@ -1312,7 +1298,7 @@ export default {
         if (step.key === 'started') {
           if (states[i] === 'done') return 'In Progress';
           if (states[i] === 'current') return 'Pending Start';
-          if (j && j.startDate && todayStr >= j.startDate) return 'In Progress';
+          if (j && j.startDate && _todayRef.value >= j.startDate) return 'In Progress';
           return 'Pending Start';
         }
         // Completed
@@ -1357,18 +1343,14 @@ export default {
 
     const jobHasStarted = computed(() => {
       const j = selectedJobData.value;
-      return j?.startDate && todayStr >= j.startDate;
-    });
-    const canEditEndDate = computed(() => {
-      const j = selectedJobData.value;
-      return j?.startDate && todayStr >= j.startDate;
+      return j?.startDate && _todayRef.value >= j.startDate;
     });
     const jobAutoCompleted = computed(() => {
       const j = selectedJobData.value;
       const ep = j?.endDate ? j.endDate.split('T')[0] : '';
       const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
       const effectiveEnd = dp || ep;
-      return effectiveEnd && todayStr > effectiveEnd && !(j.endDate && j.endDate.includes('T'));
+      return effectiveEnd && _todayRef.value > effectiveEnd && !(j.endDate && j.endDate.includes('T'));
     });
 
     function selectJob(jobId, isDraft) {
@@ -1590,7 +1572,11 @@ export default {
       }
       return Math.max(1, days);
     }
-    onBeforeUnmount(() => { document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd); });
+    onBeforeUnmount(() => {
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      if (_midnightTimer) clearTimeout(_midnightTimer);
+    });
 
     // ─── CAPACITY FORM ───
     const capForm = reactive({ title: '', ruleType: 'default', custType: 'uv', quantity: 100, month: '', startDate: '', endDate: '' });
@@ -1627,7 +1613,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, gridStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, editStartDateChanged, editTypeChanged, editLosesPriority, editPreviewEndDate, editPreviewDelayDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
@@ -1639,8 +1625,8 @@ export default {
       stageEditing, startStageEdit, cancelStageEdit,
       stageArrivalDate, stageCheckoutDate,
       submitArrival, submitCheckout, removeArrival, removeCheckout, removeBdConnection,
-      showEndTimeInput, endTimeOnly, endDateHasTime, setEndTime, removeEndTime, cancelEndTimeInput,
-      showDelayEndTimeInput, delayEndTimeOnly, delayEndDateHasTime, setDelayEndTime, removeDelayEndTime, cancelDelayEndTimeInput,
+      showEndTimeInput, endTimeOnly, setEndTime, cancelEndTimeInput,
+      showDelayEndTimeInput, delayEndTimeOnly, setDelayEndTime, cancelDelayEndTimeInput,
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
       startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
