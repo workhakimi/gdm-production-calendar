@@ -1296,7 +1296,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-day-num { font-size: 11px; font-weight: 600; color: $gray-700; }
 .cal-day-month { font-size: 9px; font-weight: 600; color: $gray-400; text-transform: uppercase; }
 .cal-cap-badges { display: flex; gap: 3px; margin-left: auto; }
-.cal-cap-badge { font-size: 7px; font-weight: 700; padding: 1px 3px; border-radius: 2px; white-space: nowrap; }
+.cal-cap-badge { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; white-space: nowrap; }
 .cal-cap--uv { color: var(--cal-uv-color); background: $blue-50; }
 .cal-cap--laser { color: var(--cal-laser-color); background: $purple-50; }
 .cal-cap--over { color: $red; background: $red-50; }
@@ -1539,7 +1539,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 @media (max-width: 900px) { .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) {
   .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr; }
-  .cal-cap-badge { font-size: 6px; }
+  .cal-cap-badge { font-size: 7px; }
   .cal-header { padding: 6px 8px; }
   .cal-day-cell { min-height: 60px; }
   .tl-label { font-size: 7px; }
