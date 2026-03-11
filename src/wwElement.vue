@@ -173,7 +173,7 @@
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
-                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
+                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(((selectedJobData.endDate_delay || selectedJobData.endDate || '').split('T')[0])) }}</span>
                   </div>
                 </div>
               </template>
@@ -321,7 +321,7 @@
                   <label class="edit-label">End Date</label>
                   <span class="edit-value edit-value--computed">
                     <span>Booking: {{ fmtDate((editPreviewEndDate || editForm.endDate || '').split('T')[0]) }}</span>
-                    <span v-if="selectedJobData.endDate_delay" class="edit-value--delay">Delay: {{ fmtDate((selectedJobData.endDate_delay || '').split('T')[0]) }}</span>
+                    <span v-if="selectedJobData.endDate_delay" class="edit-value--delay">Delay: {{ fmtDate((editPreviewDelayDate || (selectedJobData.endDate_delay || '').split('T')[0])) }}</span>
                   </span>
                 </div>
                 <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
@@ -761,6 +761,19 @@ export default {
       const result = allocateJobs(others, edited);
       return result.jobEndDates[j.id] || '';
     });
+    const editPreviewDelayDate = computed(() => {
+      if (!editMode.value) return '';
+      const j = selectedJobData.value;
+      if (!j || !j.endDate_delay) return '';
+      const origEndClean = j.endDate ? j.endDate.split('T')[0] : '';
+      const origDelay = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      if (!origEndClean || !origDelay) return '';
+      const newEnd = editPreviewEndDate.value || origEndClean;
+      if (newEnd === origEndClean) return origDelay;
+      const diffMs = (parseDate(newEnd)?.getTime() || 0) - (parseDate(origEndClean)?.getTime() || 0);
+      const shifted = new Date((parseDate(origDelay)?.getTime() || 0) + diffMs);
+      return toDateStr(shifted);
+    });
     const draftDaysRequired = computed(() => {
       if (!draftEndDateRaw.value || !draftJob.startDate) return '–';
       const s = parseDate(draftJob.startDate), e = parseDate(draftEndDateRaw.value);
@@ -1063,15 +1076,35 @@ export default {
       // ─── DELAY TAIL SEGMENTS ───
       // For jobs with endDate_delay, add red segments from endDate+1 to endDate_delay
       for (const jid of ids) {
-        if (jid === '__draft__') continue;
-        const job = resolvedJobs.value.find(j => j.id === jid);
-        if (!job) continue;
-        // Use delayDateInput preview if this job is selected and in delay mode
-        const delayEndRaw = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
-          ? delayDateInput.value
-          : (job.endDate_delay || '');
+        let job, delayEndRaw, jobEndClean;
+        if (jid === '__draft__') {
+          // Edit preview: shift delay from original job by end date offset
+          if (!editMode.value || !editLosesPriority.value || !selectedJobId.value) continue;
+          const orig = resolvedJobs.value.find(j => j.id === selectedJobId.value);
+          if (!orig || !orig.endDate_delay) continue;
+          const draftEnd = fullResult.value.jobEndDates['__draft__'] || '';
+          if (!draftEnd) continue;
+          const origEndClean = orig.endDate ? orig.endDate.split('T')[0] : '';
+          const origDelay = orig.endDate_delay ? orig.endDate_delay.split('T')[0] : '';
+          if (!origEndClean || !origDelay) continue;
+          const diffMs = (parseDate(draftEnd)?.getTime() || 0) - (parseDate(origEndClean)?.getTime() || 0);
+          const shiftedDelay = new Date((parseDate(origDelay)?.getTime() || 0) + diffMs);
+          delayEndRaw = toDateStr(shiftedDelay);
+          jobEndClean = draftEnd;
+          job = { endDate: draftEnd, endDate_delay: delayEndRaw };
+        } else {
+          job = resolvedJobs.value.find(j => j.id === jid);
+          if (!job) continue;
+          // Skip original job if it's being edited with priority loss (draft handles it)
+          if (editMode.value && editLosesPriority.value && jid === selectedJobId.value) continue;
+          // Use delayDateInput preview if this job is selected and in delay mode
+          delayEndRaw = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
+            ? delayDateInput.value
+            : (job.endDate_delay || '');
+          delayEndRaw = delayEndRaw ? delayEndRaw.split('T')[0] : '';
+          jobEndClean = job.endDate ? job.endDate.split('T')[0] : '';
+        }
         const delayEnd = delayEndRaw ? delayEndRaw.split('T')[0] : '';
-        const jobEndClean = job.endDate ? job.endDate.split('T')[0] : '';
         if (!delayEnd || !jobEndClean || delayEnd <= jobEndClean) continue;
         const ji = jobSet.get(jid);
         if (!ji || ji.ri === undefined) continue;
@@ -1193,11 +1226,15 @@ export default {
       if (j.checkout_date) return 6;
       const endHasTime = j.endDate && j.endDate.includes('T');
       const endDatePart = j.endDate ? j.endDate.split('T')[0] : '';
+      const delayDatePart = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      // Effective end = delay end date if exists, else end date
+      const effectiveEnd = delayDatePart || endDatePart;
+      // Completed: end date has time set (same-day completion) OR past effective end date
       if (endHasTime) return 5;
-      if (j.arrival_date) {
-        // Arrived: show "Started" stage (3) if not yet past end, "Complete" stage (4) if past end date
-        return (endDatePart && todayStr > endDatePart) ? 4 : 3;
-      }
+      if (effectiveEnd && todayStr > effectiveEnd) return 5;
+      // In progress: today >= start date
+      if (j.startDate && todayStr >= j.startDate) return 3;
+      if (j.arrival_date) return 2;
       if (j.bd_number) return 2;
       return 1;
     });
@@ -1208,9 +1245,18 @@ export default {
       if (!j) return STAGES.map(() => 'pending');
       const si = jobStageIndex.value;
       return STAGES.map((step, i) => {
-        if (i >= si) return i === si ? 'active' : 'pending';
-        // Past stages — check for issues
-        if (step.key === 'connected' && j.bd_number && !selectedBdBatch.value) return 'warn';
+        if (i > si) return 'pending';
+        if (i === si) return 'active';
+        // Past stages — check for issues, but also mark done if actually happened
+        if (step.key === 'connected') {
+          if (!j.bd_number) return 'warn';
+          if (j.bd_number && !selectedBdBatch.value) return 'warn';
+          return 'done';
+        }
+        if (step.key === 'arrived') return j.arrival_date ? 'done' : 'warn';
+        if (step.key === 'started') {
+          return (j.startDate && todayStr >= j.startDate) ? 'done' : 'pending';
+        }
         return 'done';
       });
     });
@@ -1221,19 +1267,22 @@ export default {
       const states = stageStates.value;
       return STAGES.map((step, i) => {
         if (states[i] === 'warn') return step.warn;
-        if (states[i] === 'pending') return step.pending;
-        // Done or active — use context-aware labels
+        // Started: reflect real state regardless of linear progression
         if (step.key === 'started') {
-          if (j && j.startDate && todayStr >= j.startDate) return 'Job Started';
+          if (j && j.startDate && todayStr >= j.startDate) return 'In Progress';
           return 'Pending Start';
         }
+        // Completed: check effective end date (delay or booking)
         if (step.key === 'completed') {
-          if (states[i] === 'active') {
-            const ep = j?.endDate ? j.endDate.split('T')[0] : '';
-            return (ep && todayStr > ep) ? 'Job Ended' : 'Pending Completion';
-          }
-          return 'Completed';
+          const ep = j?.endDate ? j.endDate.split('T')[0] : '';
+          const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+          const effectiveEnd = dp || ep;
+          if (j?.endDate && j.endDate.includes('T')) return 'Completed';
+          if (effectiveEnd && todayStr > effectiveEnd) return 'Completed';
+          if (j?.endDate_delay) return 'Pending Completion';
+          return 'Pending Completion';
         }
+        if (states[i] === 'pending') return step.pending;
         return states[i] === 'done' ? step.done : step.pending;
       });
     });
@@ -1278,7 +1327,9 @@ export default {
     const jobAutoCompleted = computed(() => {
       const j = selectedJobData.value;
       const ep = j?.endDate ? j.endDate.split('T')[0] : '';
-      return ep && todayStr > ep && !(j.endDate && j.endDate.includes('T'));
+      const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      const effectiveEnd = dp || ep;
+      return effectiveEnd && todayStr > effectiveEnd && !(j.endDate && j.endDate.includes('T'));
     });
 
     function selectJob(jobId, isDraft) {
@@ -1539,7 +1590,7 @@ export default {
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
-      editMode, editForm, editStartDateChanged, editTypeChanged, editLosesPriority, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
+      editMode, editForm, editStartDateChanged, editTypeChanged, editLosesPriority, editPreviewEndDate, editPreviewDelayDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
       isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
