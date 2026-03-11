@@ -101,23 +101,23 @@
               <!-- Stage 1: Connected — BD input -->
               <template v-if="jobStageIndex === 1">
                 <div class="stage-action">
-                  <span class="stage-prompt">Connect a BD Number to proceed</span>
-                  <div class="stage-row">
-                    <div class="bd-select-wrapper bd-select-wrapper--inline">
-                      <input class="edit-input" v-model="stageBdSearch" placeholder="Search BD#..." @focus="stageBdOpen = true" @blur="closeStageBdDropdown" />
-                      <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown">
+                  <div class="stage-inline">
+                    <span class="stage-inline-label">BD#</span>
+                    <div class="bd-select-wrapper bd-select-wrapper--stage">
+                      <input class="edit-input edit-input--sm" v-model="stageBdSearch" placeholder="Search..." @focus="stageBdOpen = true" @blur="closeStageBdDropdown" />
+                      <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown bd-dropdown--compact">
                         <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="selectStageBd(opt)">
                           <span class="bd-opt-num">{{ opt.bd_number }}</span>
-                          <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
+                          <span class="bd-opt-cust type-tag type-tag--sm" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
                           <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                         </div>
                       </div>
                     </div>
-                    <span v-if="stageBdSelected" class="bd-selected-tag">
+                    <span v-if="stageBdSelected" class="bd-pick">
                       {{ stageBdSelected.bd_number }}
-                      <button class="bd-clear-btn" @click="clearStageBd">×</button>
+                      <button class="bd-pick-x" @click="clearStageBd">×</button>
                     </span>
-                    <button class="btn-action btn-action--primary" :disabled="!stageBdSelected" @click="submitStageBd">Connect BD</button>
+                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageBdSelected" @click="submitStageBd">Connect</button>
                   </div>
                 </div>
               </template>
@@ -125,13 +125,10 @@
               <!-- Stage 2: Arrival — date input -->
               <template v-if="jobStageIndex === 2">
                 <div class="stage-action">
-                  <span class="stage-prompt">Set the stock arrival date</span>
-                  <div class="stage-row">
-                    <div class="edit-field edit-field--compact">
-                      <span class="edit-label">Arrival Date</span>
-                      <input type="date" class="edit-input" v-model="stageArrivalDate" />
-                    </div>
-                    <button class="btn-action btn-action--primary" :disabled="!stageArrivalDate" @click="submitArrival">Set Arrival</button>
+                  <div class="stage-inline">
+                    <span class="stage-inline-label">Arrival</span>
+                    <input type="date" class="edit-input edit-input--sm" v-model="stageArrivalDate" />
+                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageArrivalDate" @click="submitArrival">Set</button>
                   </div>
                 </div>
               </template>
@@ -139,15 +136,13 @@
               <!-- Stage 3: Started / Pending Start + Manual Complete -->
               <template v-if="jobStageIndex === 3 || jobStageIndex === 4">
                 <div class="stage-action">
-                  <span v-if="!jobHasStarted" class="stage-prompt">Pending start — begins {{ fmtDate(selectedJobData.startDate) }}</span>
-                  <span v-else class="stage-prompt stage-prompt--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
-                  <div class="stage-row">
-                    <button class="btn-action btn-action--muted" @click="enterReschedule">Change Start Date</button>
-                    <div class="edit-field edit-field--compact">
-                      <span class="edit-label">Complete Date</span>
-                      <input type="date" class="edit-input" v-model="stageCompleteDate" />
-                    </div>
-                    <button class="btn-action btn-action--primary" :disabled="!stageCompleteDate" @click="submitComplete">Mark Completed</button>
+                  <div class="stage-inline">
+                    <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
+                    <span v-else class="stage-inline-hint stage-inline-hint--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                    <span class="stage-inline-sep"></span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="enterReschedule">Reschedule</button>
+                    <input type="date" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
+                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Complete</button>
                   </div>
                 </div>
               </template>
@@ -155,35 +150,26 @@
               <!-- Reschedule inline mode -->
               <template v-if="isRescheduling">
                 <div class="stage-action stage-action--warn">
-                  <span class="stage-prompt stage-prompt--warn">Drag or resize the preview bar on the calendar, then submit.</span>
-                  <div class="stage-row">
-                    <div class="edit-field edit-field--compact">
-                      <span class="edit-label">New Start</span>
-                      <input type="date" class="edit-input" v-model="rescheduleJob.startDate" />
-                    </div>
-                    <div class="edit-field edit-field--compact">
-                      <span class="edit-label">New End</span>
-                      <span class="cal-computed-value">{{ rescheduleEndDate }}</span>
-                    </div>
+                  <div class="stage-inline">
+                    <span class="stage-inline-label">New Start</span>
+                    <input type="date" class="edit-input edit-input--sm" v-model="rescheduleJob.startDate" />
+                    <span class="stage-inline-label">End</span>
+                    <span class="stage-inline-computed">{{ rescheduleEndDate }}</span>
+                    <span class="stage-inline-sep"></span>
+                    <button class="btn-action btn-action--muted btn-sm" @click="cancelReschedule">Cancel</button>
+                    <button class="btn-action btn-action--submit btn-sm" :disabled="!rescheduleJob.startDate" @click="submitReschedule">Confirm</button>
                   </div>
-                  <div class="stage-warn-msg">Changing the start date will update the booking creation timestamp. You may lose your current booking priority.</div>
-                  <div class="stage-row">
-                    <button class="btn-action btn-action--muted" @click="cancelReschedule">Cancel</button>
-                    <button class="btn-action btn-action--submit" :disabled="!rescheduleJob.startDate" @click="submitReschedule">Confirm Change</button>
-                  </div>
+                  <div class="stage-warn-msg">Priority may change. Drag the preview bar on the calendar or type a date above.</div>
                 </div>
               </template>
 
               <!-- Stage 5: Checkout -->
               <template v-if="jobStageIndex === 5">
                 <div class="stage-action">
-                  <span class="stage-prompt">Ready for checkout</span>
-                  <div class="stage-row">
-                    <div class="edit-field edit-field--compact">
-                      <span class="edit-label">Checkout Date</span>
-                      <input type="date" class="edit-input" v-model="stageCheckoutDate" />
-                    </div>
-                    <button class="btn-action btn-action--primary" :disabled="!stageCheckoutDate" @click="submitCheckout">Set Checkout</button>
+                  <div class="stage-inline">
+                    <span class="stage-inline-label">Checkout</span>
+                    <input type="date" class="edit-input edit-input--sm" v-model="stageCheckoutDate" />
+                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCheckoutDate" @click="submitCheckout">Set</button>
                   </div>
                 </div>
               </template>
@@ -1153,16 +1139,24 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
 
 // ─── STAGE PANEL ───
-.stage-panel { margin-bottom: 10px; }
+.stage-panel { margin-bottom: 8px; }
 .stage-action {
-  padding: 8px 10px; background: $gray-50; border: 1px solid $gray-200; border-radius: 4px; margin-bottom: 6px;
+  padding: 5px 8px; background: $gray-50; border: 1px solid $gray-200; border-radius: 3px; margin-bottom: 4px;
 }
 .stage-action--warn { border-color: $amber; background: $amber-50; }
-.stage-prompt { font-size: 11px; color: $gray-600; display: block; margin-bottom: 6px; }
-.stage-prompt--active { color: $green; font-weight: 600; }
-.stage-prompt--warn { color: darken($amber, 10%); }
-.stage-row { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
-.stage-warn-msg { font-size: 10px; color: $red; margin: 6px 0; font-style: italic; }
+.stage-inline {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.stage-inline-label {
+  font-size: 10px; font-weight: 700; color: $gray-500; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.stage-inline-hint {
+  font-size: 10px; color: $gray-500; white-space: nowrap;
+}
+.stage-inline-hint--active { color: $green; font-weight: 600; }
+.stage-inline-computed { font-size: 11px; font-weight: 700; color: $green; }
+.stage-inline-sep { width: 1px; height: 14px; background: $gray-300; flex-shrink: 0; }
+.stage-warn-msg { font-size: 9px; color: $red; margin-top: 4px; font-style: italic; }
 
 // ─── FORMS ───
 .cal-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -1180,6 +1174,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   &:focus { border-color: var(--cal-accent); box-shadow: 0 0 0 1px var(--cal-accent); }
   &::placeholder { color: $gray-400; }
 }
+.edit-input--sm { padding: 3px 6px; font-size: 10px; }
 .edit-select {
   padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
   outline: none; color: $gray-900; background: $white; cursor: pointer;
@@ -1210,6 +1205,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── TYPE TAGS ───
 .type-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.type-tag--sm { font-size: 8px; padding: 0 4px; }
 .type-tag--uv { color: var(--cal-uv-color); background: $blue-50; }
 .type-tag--laser { color: var(--cal-laser-color); background: $purple-50; }
 
@@ -1225,24 +1221,31 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 // ─── BD DROPDOWN ───
 .bd-select-wrapper { position: relative; }
 .bd-select-wrapper--inline { min-width: 200px; }
+.bd-select-wrapper--stage { min-width: 140px; }
 .bd-search-input { width: 100%; }
 .bd-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; background: $white;
   border: 1px solid $gray-300; border-top: none; border-radius: 0 0 3px 3px;
   max-height: 180px; overflow-y: auto; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
+.bd-dropdown--compact { min-width: 260px; }
 .bd-dropdown-item {
-  display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; gap: 4px; padding: 4px 6px; font-size: 10px; cursor: pointer;
   transition: background 0.08s; &:hover { background: $gray-50; }
 }
 .bd-dropdown-item--selected { background: $blue-50; }
-.bd-opt-num { font-weight: 700; color: $gray-800; min-width: 60px; }
-.bd-opt-meta { color: $gray-500; font-size: 10px; margin-left: auto; }
+.bd-opt-num { font-weight: 700; color: $gray-800; min-width: 50px; font-size: 10px; }
+.bd-opt-meta { color: $gray-500; font-size: 9px; margin-left: auto; white-space: nowrap; }
 .bd-selected-tag {
   display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 8px;
   background: $blue-50; color: $blue; font-size: 11px; font-weight: 600; border-radius: 3px;
 }
 .bd-clear-btn { background: none; border: none; color: $blue; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0 2px; line-height: 1; &:hover { color: $red; } }
+.bd-pick {
+  display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px;
+  background: $blue-50; color: $blue; font-size: 10px; font-weight: 700; border-radius: 2px; white-space: nowrap;
+}
+.bd-pick-x { background: none; border: none; color: $blue; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0 1px; line-height: 1; &:hover { color: $red; } }
 
 // ─── BD BATCH CARD ───
 .bd-batch-card { background: $white; border: 1px solid $gray-200; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
