@@ -158,6 +158,7 @@
                     <span class="stage-inline-label">Arrival</span>
                     <span class="stage-inline-value">{{ fmtDate(selectedJobData.arrival_date) }}</span>
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(2)">Edit</button>
+                    <button class="btn-action btn-action--danger btn-sm" @click="removeArrival">Remove</button>
                   </div>
                   <div v-else class="stage-inline">
                     <span class="stage-inline-label">Arrival</span>
@@ -257,6 +258,7 @@
                     <span class="stage-inline-label">Checkout</span>
                     <span class="stage-inline-value">{{ fmtDate(selectedJobData.checkout_date) }}</span>
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(5)">Edit</button>
+                    <button class="btn-action btn-action--danger btn-sm" @click="removeCheckout">Remove</button>
                   </div>
                   <div v-else class="stage-inline">
                     <span class="stage-inline-label">Checkout</span>
@@ -921,6 +923,12 @@ export default {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
       stageCheckoutDate.value = todayStr; stageEditing.value = null;
+    }
+    function removeArrival() {
+      emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: null } } });
+    }
+    function removeCheckout() {
+      emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: null } } });
     }
 
     // ─── RESCHEDULE ───
@@ -1622,7 +1630,7 @@ export default {
       stageBdSearch, stageBdOpen, stageBdSelected, filteredStageBdOptions, closeStageBdDropdown, selectStageBd, clearStageBd, submitStageBd,
       stageEditing, startStageEdit, cancelStageEdit,
       stageArrivalDate, stageCheckoutDate,
-      submitArrival, submitCheckout,
+      submitArrival, submitCheckout, removeArrival, removeCheckout,
       showEndTimeInput, endTimeOnly, endDateHasTime, setEndTime, removeEndTime, cancelEndTimeInput,
       showDelayEndTimeInput, delayEndTimeOnly, delayEndDateHasTime, setDelayEndTime, removeDelayEndTime, cancelDelayEndTimeInput,
       delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
