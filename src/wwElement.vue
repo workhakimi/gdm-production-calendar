@@ -1114,7 +1114,6 @@ export default {
         const delayDayIdxs = [];
         for (let di = 0; di < days.length; di++) {
           const d = days[di];
-          if (d.outside) continue;
           if (d.dateStr > jobEndClean && d.dateStr <= delayEnd && !d.isWeekend) {
             delayDayIdxs.push(di);
           }
@@ -1147,7 +1146,7 @@ export default {
           segs.push({
             key: `${jid}-delay-${wi}`, jobId: jid, title: ji.title, type: ji.type,
             totalQty: ji.totalQty, color: ji.resolvedColor, isGap: false, isDelay: true,
-            isDraft: false, isFirst: false, isLast: wi === dLast,
+            isDraft: ji.isDraft, isFirst: false, isLast: wi === dLast,
             showLabel: true, weekIndex: wi, startCol: sp.min, endCol: sp.max, rowIndex: ri,
           });
         }
