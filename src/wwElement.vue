@@ -57,21 +57,24 @@
           :key="seg.key"
           class="cal-job-bar"
           :class="{
-            'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
+            'cal-job--selected': !seg.isGap && !seg.isDelay && seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft && !seg.isGap,
-            'cal-job--editable': !seg.isGap && editMode && seg.jobId === selectedJobId,
+            'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
             'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
-              || (editMode && !editStartDateChanged && !seg.isGap && seg.jobId !== selectedJobId),
+              || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
             'cal-job--gap': seg.isGap,
+            'cal-job--delay': seg.isDelay,
           }"
           :style="segmentStyle(seg)"
-          @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
+          @click.stop="!seg.isGap && !seg.isDelay && selectJob(seg.jobId, seg.isDraft)"
           @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
         >
-          <div v-if="!seg.isGap && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-          <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
-          <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <div v-if="!seg.isGap && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
+          <span v-if="!seg.isGap && !seg.isDelay && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
+          <span v-if="!seg.isGap && !seg.isDelay && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
+          <span v-if="seg.isDelay && seg.showLabel" class="cal-job-title cal-delay-label">DELAY</span>
+          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+          <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
         </div>
       </div>
     </div>
@@ -179,18 +182,47 @@
               <!-- Stage 4: Complete -->
               <template v-if="activeStageIdx === 4">
                 <div class="stage-action">
+                  <!-- Read-only: completed -->
                   <div v-if="selectedJobData.completed_at && stageEditing !== 4" class="stage-inline">
                     <span class="stage-inline-label">Completed</span>
                     <span class="stage-inline-value">{{ fmtDate(selectedJobData.completed_at) }}</span>
                     <button class="btn-action btn-action--muted btn-sm" @click="startStageEdit(4)">Edit</button>
                   </div>
-                  <div v-else class="stage-inline">
-                    <span class="stage-inline-hint">Computed end date — {{ fmtDate(selectedJobData.endDate) }}</span>
-                    <span class="stage-inline-sep"></span>
-                    <input type="datetime-local" class="edit-input edit-input--sm" v-model="stageCompleteDate" />
-                    <button class="btn-action btn-action--primary btn-sm" :disabled="!stageCompleteDate" @click="submitComplete">Set Complete</button>
-                    <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
-                  </div>
+                  <!-- Set complete -->
+                  <template v-else>
+                    <div class="stage-inline">
+                      <span class="stage-inline-hint">Completion date — {{ fmtDate(selectedJobData.endDate_delay || selectedJobData.endDate) }}</span>
+                      <template v-if="showCompleteTime">
+                        <input type="time" class="edit-input edit-input--sm" v-model="completeTimeOnly" />
+                      </template>
+                      <button class="btn-action btn-action--muted btn-sm" @click="showCompleteTime = !showCompleteTime">{{ showCompleteTime ? 'Remove Time' : 'Add Time' }}</button>
+                      <button class="btn-action btn-action--primary btn-sm" @click="submitComplete">Set Complete</button>
+                      <button v-if="selectedJobData.completed_at" class="btn-action btn-action--muted btn-sm" @click="cancelStageEdit">Cancel</button>
+                    </div>
+                    <!-- Delay section (only for in-progress jobs) -->
+                    <template v-if="jobHasStarted && !selectedJobData.completed_at">
+                      <div v-if="!delayMode" class="stage-inline" style="margin-top:6px">
+                        <template v-if="selectedJobData.endDate_delay">
+                          <span class="stage-inline-label delay-tag">Delayed to</span>
+                          <span class="stage-inline-value delay-value">{{ fmtDate(selectedJobData.endDate_delay) }}</span>
+                          <span class="stage-inline-hint">{{ selectedJobData.delay_reason }}</span>
+                          <button class="btn-action btn-action--muted btn-sm" @click="openDelayMode">Edit</button>
+                          <button class="btn-action btn-action--danger btn-sm" @click="removeDelay">Remove</button>
+                        </template>
+                        <template v-else>
+                          <button class="btn-action btn-action--warn btn-sm" @click="openDelayMode">Raise End Delay</button>
+                        </template>
+                      </div>
+                      <div v-else class="delay-form">
+                        <span class="stage-inline-label">Delayed End Date</span>
+                        <input type="date" class="edit-input edit-input--sm" v-model="delayDateInput" :min="selectedJobData.endDate" />
+                        <span class="stage-inline-label">Reason</span>
+                        <input type="text" class="edit-input edit-input--sm delay-reason-input" v-model="delayReasonInput" placeholder="Reason for delay..." />
+                        <button class="btn-action btn-action--primary btn-sm" :disabled="!delayDateInput || !delayReasonInput" @click="submitDelay">Set Delayed End Date</button>
+                        <button class="btn-action btn-action--muted btn-sm" @click="cancelDelay">Cancel</button>
+                      </div>
+                    </template>
+                  </template>
                 </div>
               </template>
 
@@ -751,11 +783,40 @@ export default {
       emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: stageArrivalDate.value } } });
       stageArrivalDate.value = ''; stageEditing.value = null;
     }
+    // ─── COMPLETION (stage 4) ───
+    const showCompleteTime = ref(false);
+    const completeTimeOnly = ref('');
     function submitComplete() {
-      if (!stageCompleteDate.value) return;
-      emit('trigger-event', { name: 'onJobComplete', event: { value: { jobId: selectedJobId.value, completed_at: stageCompleteDate.value } } });
-      stageCompleteDate.value = ''; stageEditing.value = null;
+      const j = selectedJobData.value;
+      if (!j) return;
+      const baseDate = j.endDate_delay || j.endDate || '';
+      const completedAt = completeTimeOnly.value ? baseDate + 'T' + completeTimeOnly.value : baseDate;
+      if (!completedAt) return;
+      emit('trigger-event', { name: 'onJobComplete', event: { value: { jobId: selectedJobId.value, completed_at: completedAt } } });
+      completeTimeOnly.value = ''; showCompleteTime.value = false; stageEditing.value = null;
     }
+
+    // ─── END DELAY ───
+    const delayMode = ref(false);
+    const delayDateInput = ref('');
+    const delayReasonInput = ref('');
+    function openDelayMode() {
+      const j = selectedJobData.value;
+      delayDateInput.value = j?.endDate_delay || j?.endDate || '';
+      delayReasonInput.value = j?.delay_reason || '';
+      delayMode.value = true;
+    }
+    function cancelDelay() { delayMode.value = false; delayDateInput.value = ''; delayReasonInput.value = ''; }
+    function submitDelay() {
+      if (!delayDateInput.value || !delayReasonInput.value) return;
+      emit('trigger-event', { name: 'onJobEndDelay', event: { value: { jobId: selectedJobId.value, endDate_delay: delayDateInput.value, delay_reason: delayReasonInput.value } } });
+      delayMode.value = false; delayDateInput.value = ''; delayReasonInput.value = '';
+    }
+    function removeDelay() {
+      emit('trigger-event', { name: 'onJobEndDelayRemove', event: { value: { jobId: selectedJobId.value } } });
+      delayMode.value = false;
+    }
+    watch(selectedJobId, () => { delayMode.value = false; showCompleteTime.value = false; completeTimeOnly.value = ''; });
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
@@ -888,8 +949,69 @@ export default {
             }
           }
         }
+        // Store row index for delay tail generation
+        jobSet.get(jid).ri = ri;
         si++;
       }
+
+      // ─── DELAY TAIL SEGMENTS ───
+      // For jobs with endDate_delay, add red segments from endDate+1 to endDate_delay
+      for (const jid of ids) {
+        if (jid === '__draft__') continue;
+        const job = resolvedJobs.value.find(j => j.id === jid);
+        if (!job) continue;
+        // Use delayDateInput preview if this job is selected and in delay mode
+        const delayEnd = (delayMode.value && jid === selectedJobId.value && delayDateInput.value)
+          ? delayDateInput.value
+          : (job.endDate_delay || '');
+        if (!delayEnd || !job.endDate || delayEnd <= job.endDate) continue;
+        const ji = jobSet.get(jid);
+        if (!ji || ji.ri === undefined) continue;
+        const ri = ji.ri;
+
+        // Collect day indices for the delay range (endDate+1 through delayEnd, skip weekends)
+        const delayDayIdxs = [];
+        for (let di = 0; di < days.length; di++) {
+          const d = days[di];
+          if (d.outside) continue;
+          if (d.dateStr > job.endDate && d.dateStr <= delayEnd && !d.isWeekend) {
+            delayDayIdxs.push(di);
+          }
+        }
+        if (!delayDayIdxs.length) continue;
+
+        // Build week spans for delay days
+        const dWeekSpans = {};
+        for (const idx of delayDayIdxs) {
+          const d = days[idx];
+          const wi = d.weekIndex;
+          if (!dWeekSpans[wi]) dWeekSpans[wi] = { min: d.dayIndex, max: d.dayIndex };
+          else { dWeekSpans[wi].min = Math.min(dWeekSpans[wi].min, d.dayIndex); dWeekSpans[wi].max = Math.max(dWeekSpans[wi].max, d.dayIndex); }
+        }
+
+        // Reserve rows for delay spans
+        const dWeekKeys = Object.keys(dWeekSpans).map(Number).sort((a, b) => a - b);
+        for (const wi of dWeekKeys) {
+          const sp = dWeekSpans[wi];
+          if (!wk[wi]) wk[wi] = [];
+          // Don't need collision check — reuse same row as job
+          const existing = wk[wi].find(r => r.ri === ri);
+          if (existing) { existing.ec = Math.max(existing.ec, sp.max); }
+          else { wk[wi].push({ sc: sp.min, ec: sp.max, ri }); }
+        }
+
+        const dFirst = dWeekKeys[0], dLast = dWeekKeys[dWeekKeys.length - 1];
+        for (const wi of dWeekKeys) {
+          const sp = dWeekSpans[wi];
+          segs.push({
+            key: `${jid}-delay-${wi}`, jobId: jid, title: ji.title, type: ji.type,
+            totalQty: ji.totalQty, color: null, isGap: false, isDelay: true,
+            isDraft: false, isFirst: false, isLast: wi === dLast,
+            showLabel: wi === dFirst, weekIndex: wi, startCol: sp.min, endCol: sp.max, rowIndex: ri,
+          });
+        }
+      }
+
       return segs;
     });
 
@@ -898,10 +1020,11 @@ export default {
       gridTemplateRows: `repeat(${Math.max(1, Math.ceil(calendarDays.value.length / 7))}, 1fr)`,
     }));
     function segmentStyle(seg) {
+      const bg = seg.isDelay ? '#ef4444' : (seg.isGap ? '#e5e7eb' : seg.color);
       return {
         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
         marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px',
-        backgroundColor: seg.isGap ? '#e5e7eb' : seg.color,
+        backgroundColor: bg,
         borderRadius: `${seg.isFirst ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isFirst ? '3px' : '0'}`,
       };
     }
@@ -1105,9 +1228,13 @@ export default {
     }
 
     function handleJobMousedown(event, seg) {
+      if (seg.isDelay) return; // delay segments handled by startDelayStretch
       if (seg.isDraft || (editMode.value && seg.jobId === selectedJobId.value)) {
         startDrag('move', event);
       }
+    }
+    function startDelayStretch(event) {
+      startDrag('delay-stretch', event);
     }
     function handleResizeStart(event, dir) {
       startDrag(dir === 'left' ? 'resize-left' : 'resize-right', event);
@@ -1163,6 +1290,11 @@ export default {
           const wd = countWorkdays(parseDate(ds), parseDate(anchor));
           const mn = computeMinDays(t.quantity, t.type, ds);
           t._maxDays = Math.max(wd, mn);
+        }
+      } else if (dragState.mode === 'delay-stretch') {
+        const j = selectedJobData.value;
+        if (j && ds >= j.endDate) {
+          delayDateInput.value = ds;
         }
       }
     }
@@ -1237,6 +1369,9 @@ export default {
       stageEditing, startStageEdit, cancelStageEdit,
       stageArrivalDate, stageCompleteDate, stageCheckoutDate,
       submitArrival, submitComplete, submitCheckout,
+      showCompleteTime, completeTimeOnly,
+      delayMode, delayDateInput, delayReasonInput, openDelayMode, cancelDelay, submitDelay, removeDelay,
+      startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
       capForm, canSubmitCapacity, submitCapacity, emitCapacityDelete,
       fmtDate, statusKey, getTeammateName, rootCssVars,
@@ -1315,6 +1450,11 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-job--editable { cursor: grab; &:active { cursor: grabbing; } }
 .cal-job--faded { opacity: 0.25; filter: grayscale(0.5); }
 .cal-job--gap { opacity: 0.35; cursor: default; pointer-events: none; }
+.cal-job--delay {
+  opacity: 0.85; cursor: default;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.2) 3px, rgba(255,255,255,0.2) 6px) !important;
+}
+.cal-delay-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.9; }
 .cal-job-title { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cal-job-qty { font-size: 8px; opacity: 0.8; margin-left: 4px; flex-shrink: 0; }
 .cal-resize-handle {
@@ -1417,6 +1557,12 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-drag-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-top: 6px; }
 .edit-warn-msg { font-size: 10px; color: $red; font-style: italic; margin-top: 4px; }
 .bd-warn { font-size: 11px; color: $amber; background: $amber-50; border: 1px solid $amber; border-radius: 3px; padding: 6px 10px; margin-top: 8px; }
+.delay-form { margin-top: 6px; padding: 6px 8px; background: $red-50; border: 1px solid $red; border-radius: 3px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.delay-reason-input { min-width: 140px; flex: 1; }
+.delay-tag { color: $red !important; }
+.delay-value { color: $red !important; }
+.btn-action--warn { background: $amber; color: $white; border-color: $amber; font-size: 10px; &:hover:not(:disabled) { filter: brightness(0.9); } }
+.btn-action--danger { background: $red; color: $white; border-color: $red; font-size: 10px; &:hover:not(:disabled) { filter: brightness(0.9); } }
 .edit-input {
   padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
   outline: none; color: $gray-900; background: $white;

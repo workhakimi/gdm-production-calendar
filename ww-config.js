@@ -58,6 +58,16 @@ export default {
       event: { value: { jobId: null, checkout_date: '' } },
     },
     {
+      name: 'onJobEndDelay',
+      label: { en: 'On job end delay' },
+      event: { value: { jobId: null, endDate_delay: '', delay_reason: '' } },
+    },
+    {
+      name: 'onJobEndDelayRemove',
+      label: { en: 'On job end delay remove' },
+      event: { value: { jobId: null } },
+    },
+    {
       name: 'onCapacityCreate',
       label: { en: 'On capacity create' },
       event: { value: { title: '', ruleType: '', custType: '', quantity: 0, startDate: '', endDate: '', month: '' } },
@@ -86,7 +96,7 @@ export default {
       bindable: true,
       defaultValue: [],
       bindingValidation: {
-        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, color, bd_number, pic_id, created_at, arrival_date, completed_at, checkout_date }',
+        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, endDate_delay, delay_reason, color, bd_number, pic_id, created_at, arrival_date, completed_at, checkout_date }',
       },
     },
     capacityData: {
