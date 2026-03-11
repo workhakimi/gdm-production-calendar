@@ -225,7 +225,7 @@
               </div>
               <div class="detail-row">
                 <div class="detail-cell"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
-                <div class="detail-cell"><label class="edit-label">End Date</label><input class="edit-input" type="date" v-model="editForm.endDate" /></div>
+                <div class="detail-cell"><label class="edit-label">End Date</label><input v-if="canEditEndDate" class="edit-input" type="date" v-model="editForm.endDate" /><span v-else class="edit-value">{{ fmtDate(editForm.endDate) }} <span class="edit-hint">(computed)</span></span></div>
                 <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
                 <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
               </div>
@@ -824,6 +824,10 @@ export default {
       const j = selectedJobData.value;
       return j?.startDate && todayStr >= j.startDate;
     });
+    const canEditEndDate = computed(() => {
+      const j = selectedJobData.value;
+      return j?.startDate && todayStr >= j.startDate;
+    });
     const jobAutoCompleted = computed(() => {
       const j = selectedJobData.value;
       return j?.endDate && todayStr > j.endDate && !j.completed_at;
@@ -1018,7 +1022,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
@@ -1182,6 +1186,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-field--compact { min-width: 120px; }
 .edit-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; }
 .edit-value { font-size: 12px; font-weight: 500; color: $gray-800; }
+.edit-hint { font-size: 9px; color: $gray-400; font-weight: 400; font-style: italic; }
 .edit-input {
   padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
   outline: none; color: $gray-900; background: $white;
