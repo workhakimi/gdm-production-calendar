@@ -967,12 +967,15 @@ export default {
     function saveEditMode() {
       const j = selectedJobData.value;
       if (!j) return;
+      // Only use recomputed start/end if start date was manually changed
+      const sd = editStartDateChanged.value ? (editForm.startDate || null) : (j.startDate || null);
+      const ed = editStartDateChanged.value ? (editPreviewEndDate.value || editForm.endDate || null) : (j.endDate || null);
       emit('trigger-event', {
         name: 'onJobUpdate',
         event: { value: {
           jobId: selectedJobId.value,
           title: editForm.title || null, type: editForm.type || 'uv', quantity: editForm.quantity,
-          startDate: editForm.startDate || null, endDate: editPreviewEndDate.value || editForm.endDate || null,
+          startDate: sd, endDate: ed,
           bd_number: j.bd_number || null, pic_id: j.pic_id || null,
           arrival_date: editForm.arrival_date || null, completed_at: j.completed_at || null,
           checkout_date: editForm.checkout_date || null,
