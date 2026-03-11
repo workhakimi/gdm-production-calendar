@@ -59,7 +59,7 @@
           :class="{
             'cal-job--selected': seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft,
-            'cal-job--faded': (isDrafting || isRescheduling) && !seg.isDraft,
+            'cal-job--faded': (isDrafting || isRescheduling || editMode) && !seg.isDraft,
           }"
           :style="segmentStyle(seg)"
           @click.stop="selectJob(seg.jobId, seg.isDraft)"
@@ -230,6 +230,8 @@
                 <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
                 <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
               </div>
+              <div class="edit-drag-hint">Drag the job bar on the calendar to change start date.</div>
+              <div v-if="editStartDateChanged" class="edit-warn-msg">Changing the start date will update the booking creation timestamp, causing you to lose your current booking priority.</div>
             </div>
 
             <!-- BD Batch Details -->
@@ -601,7 +603,7 @@ export default {
     const isRescheduling = ref(false);
     const rescheduleJob = reactive({ startDate: '', _maxDays: 0, quantity: 0, type: 'uv', id: '__draft__', title: '' });
 
-    // The "extra" job for calendar preview (draft or reschedule ghost)
+    // The "extra" job for calendar preview (draft, reschedule, or edit ghost)
     const previewExtra = computed(() => {
       if (isDrafting.value && draftJob.startDate && draftJob.quantity > 0) {
         return { id: '__draft__', title: draftJob.title || 'New Job', type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, _maxDays: draftJob._maxDays };
@@ -609,12 +611,15 @@ export default {
       if (isRescheduling.value && rescheduleJob.startDate && rescheduleJob.quantity > 0) {
         return { id: '__draft__', title: rescheduleJob.title || 'Reschedule', type: rescheduleJob.type, quantity: rescheduleJob.quantity, startDate: rescheduleJob.startDate, _maxDays: rescheduleJob._maxDays };
       }
+      if (editMode.value && editForm.startDate && editForm.quantity > 0) {
+        return { id: '__draft__', title: editForm.title || 'Edit', type: editForm.type, quantity: editForm.quantity, startDate: editForm.startDate, _maxDays: 0 };
+      }
       return null;
     });
 
-    // For reschedule, exclude the original job from the base list
+    // For reschedule or edit mode, exclude the original job from the base list
     const jobsForAllocation = computed(() => {
-      if (isRescheduling.value && selectedJobId.value) {
+      if ((isRescheduling.value || editMode.value) && selectedJobId.value) {
         return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
       }
       return resolvedJobs.value;
@@ -850,7 +855,7 @@ export default {
 
     // ─── EDIT MODE ───
     const editMode = ref(false);
-    const editForm = reactive({ title: '', type: 'uv', quantity: 0, startDate: '', endDate: '', arrival_date: '', checkout_date: '' });
+    const editForm = reactive({ title: '', type: 'uv', quantity: 0, startDate: '', endDate: '', arrival_date: '', checkout_date: '', _maxDays: 0 });
 
     function enterEditMode() {
       const j = selectedJobData.value;
@@ -862,6 +867,10 @@ export default {
       });
       editMode.value = true;
     }
+    const editStartDateChanged = computed(() => {
+      const j = selectedJobData.value;
+      return editMode.value && j && editForm.startDate !== (j.startDate || '');
+    });
     function cancelEditMode() { editMode.value = false; }
     function saveEditMode() {
       const changes = {};
@@ -935,10 +944,15 @@ export default {
       if (day.isWeekend || day.outside) return;
       if (isDrafting.value) draftJob.startDate = day.dateStr;
       else if (isRescheduling.value) rescheduleJob.startDate = day.dateStr;
+      else if (editMode.value) editForm.startDate = day.dateStr;
     }
 
-    // Target for drag: either draftJob or rescheduleJob
-    const dragTarget = computed(() => isRescheduling.value ? rescheduleJob : draftJob);
+    // Target for drag: draftJob, rescheduleJob, or editForm
+    const dragTarget = computed(() => {
+      if (isRescheduling.value) return rescheduleJob;
+      if (editMode.value) return editForm;
+      return draftJob;
+    });
 
     function onDragMove(event) {
       if (!dragState.active) return;
@@ -1025,7 +1039,7 @@ export default {
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
-      editMode, editForm, enterEditMode, cancelEditMode, saveEditMode,
+      editMode, editForm, editStartDateChanged, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
       isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
@@ -1188,6 +1202,8 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; }
 .edit-value { font-size: 12px; font-weight: 500; color: $gray-800; }
 .edit-hint { font-size: 9px; color: $gray-400; font-weight: 400; font-style: italic; }
+.edit-drag-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-top: 6px; }
+.edit-warn-msg { font-size: 10px; color: $red; font-style: italic; margin-top: 4px; }
 .edit-input {
   padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
   outline: none; color: $gray-900; background: $white;
