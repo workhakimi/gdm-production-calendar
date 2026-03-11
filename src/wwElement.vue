@@ -57,18 +57,19 @@
           :key="seg.key"
           class="cal-job-bar"
           :class="{
-            'cal-job--selected': seg.jobId === selectedJobId,
-            'cal-job--draft': seg.isDraft,
+            'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
+            'cal-job--draft': seg.isDraft && !seg.isGap,
             'cal-job--faded': (isDrafting || isRescheduling || editMode) && !seg.isDraft,
+            'cal-job--gap': seg.isGap,
           }"
           :style="segmentStyle(seg)"
-          @click.stop="selectJob(seg.jobId, seg.isDraft)"
-          @mousedown.stop="handleJobMousedown($event, seg)"
+          @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
+          @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
         >
-          <div v-if="seg.isDraft && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-          <span v-if="seg.isFirst" class="cal-job-title">{{ seg.title }}</span>
-          <span v-if="seg.isLast" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <div v-if="seg.isDraft && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+          <div v-if="!seg.isGap && seg.isDraft && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
+          <span v-if="!seg.isGap && seg.isFirst" class="cal-job-title">{{ seg.title }}</span>
+          <span v-if="!seg.isGap && seg.isLast" class="cal-job-qty">{{ seg.totalQty }}</span>
+          <div v-if="!seg.isGap && seg.isDraft && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
         </div>
       </div>
     </div>
@@ -760,29 +761,70 @@ export default {
       const ids = [...jobSet.keys()].sort((a, b) => a === '__draft__' ? 1 : b === '__draft__' ? -1 : 0);
       for (const jid of ids) {
         const ji = jobSet.get(jid);
-        const pos = [];
+        // Build set of day indices that have allocation for this job
+        const activeDays = new Set();
         for (const day of days) {
           const ja = (am[day.dateStr] || []).find(a => a.jobId === jid);
-          if (ja && !day.isWeekend) pos.push({ weekIndex: day.weekIndex, dayIndex: day.dayIndex, qty: ja.qty });
+          if (ja) activeDays.add(day.idx);
         }
-        if (!pos.length) continue;
-        const runs = []; let cr = null;
-        for (const p of pos) {
-          if (!cr || p.weekIndex !== cr.weekIndex || p.dayIndex !== cr.endCol + 1) { if (cr) runs.push(cr); cr = { weekIndex: p.weekIndex, startCol: p.dayIndex, endCol: p.dayIndex }; }
-          else cr.endCol = p.dayIndex;
+        if (!activeDays.size) continue;
+        const col = ji.color || (ji.type === 'laser' ? JOB_COLORS_LASER[si % JOB_COLORS_LASER.length] : JOB_COLORS_UV[si % JOB_COLORS_UV.length]);
+
+        // Find the full span per week (first active to last active in that week row)
+        const weekSpans = {};
+        for (const idx of activeDays) {
+          const day = days[idx];
+          const wi = day.weekIndex;
+          if (!weekSpans[wi]) weekSpans[wi] = { min: day.dayIndex, max: day.dayIndex };
+          else { weekSpans[wi].min = Math.min(weekSpans[wi].min, day.dayIndex); weekSpans[wi].max = Math.max(weekSpans[wi].max, day.dayIndex); }
         }
-        if (cr) runs.push(cr);
-        for (const run of runs) {
-          if (!wk[run.weekIndex]) wk[run.weekIndex] = [];
-          let ri = 0;
-          while (wk[run.weekIndex].some(r => r.ri === ri && !(run.endCol < r.sc || run.startCol > r.ec))) ri++;
-          wk[run.weekIndex].push({ sc: run.startCol, ec: run.endCol, ri });
-          const col = ji.color || (ji.type === 'laser' ? JOB_COLORS_LASER[si % JOB_COLORS_LASER.length] : JOB_COLORS_UV[si % JOB_COLORS_UV.length]);
-          segs.push({
-            key: `${jid}-${run.weekIndex}-${run.startCol}`, jobId: jid, title: ji.title, type: ji.type,
-            totalQty: ji.totalQty, color: col, isDraft: ji.isDraft, isFirst: run === runs[0], isLast: run === runs[runs.length - 1],
-            weekIndex: run.weekIndex, startCol: run.startCol, endCol: run.endCol, rowIndex: ri,
-          });
+
+        // Assign consistent row index per job across all its weeks
+        const weekKeys = Object.keys(weekSpans).map(Number).sort((a, b) => a - b);
+        // Find a row index that doesn't collide in ANY of this job's weeks
+        let ri = 0;
+        let found = false;
+        while (!found) {
+          found = true;
+          for (const wi of weekKeys) {
+            const sp = weekSpans[wi];
+            if (!wk[wi]) wk[wi] = [];
+            if (wk[wi].some(r => r.ri === ri && !(sp.max < r.sc || sp.min > r.ec))) { found = false; break; }
+          }
+          if (!found) ri++;
+        }
+        // Reserve the row
+        for (const wi of weekKeys) {
+          const sp = weekSpans[wi];
+          if (!wk[wi]) wk[wi] = [];
+          wk[wi].push({ sc: sp.min, ec: sp.max, ri });
+        }
+
+        // Build sub-segments per week: split into active (colored) and gap (grey) runs
+        const isFirstWeek = weekKeys[0], isLastWeek = weekKeys[weekKeys.length - 1];
+        for (const wi of weekKeys) {
+          const sp = weekSpans[wi];
+          let curType = null, curStart = sp.min;
+          for (let di = sp.min; di <= sp.max + 1; di++) {
+            const dayIdx = wi * 7 + di;
+            const isActive = di <= sp.max && activeDays.has(dayIdx);
+            const segType = isActive ? 'active' : 'gap';
+            if (di > sp.max || (curType !== null && segType !== curType)) {
+              // Flush current run
+              const endCol = di - 1;
+              const isJobFirst = wi === isFirstWeek && curStart === sp.min;
+              const isJobLast = wi === isLastWeek && endCol === sp.max;
+              segs.push({
+                key: `${jid}-${wi}-${curStart}-${curType}`, jobId: jid, title: ji.title, type: ji.type,
+                totalQty: ji.totalQty, color: curType === 'active' ? col : null, isGap: curType === 'gap',
+                isDraft: ji.isDraft, isFirst: isJobFirst, isLast: isJobLast,
+                weekIndex: wi, startCol: curStart, endCol, rowIndex: ri,
+              });
+              curStart = di; curType = segType;
+            } else if (curType === null) {
+              curType = segType;
+            }
+          }
         }
         si++;
       }
@@ -796,7 +838,8 @@ export default {
     function segmentStyle(seg) {
       return {
         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
-        marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px', backgroundColor: seg.color,
+        marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px',
+        backgroundColor: seg.isGap ? '#e5e7eb' : seg.color,
         borderRadius: `${seg.isFirst ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isFirst ? '3px' : '0'}`,
       };
     }
@@ -1145,6 +1188,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-job--selected { outline: 2px solid $gray-900; outline-offset: -1px; z-index: 8; }
 .cal-job--draft { border: 1.5px dashed rgba(255,255,255,0.7); opacity: 0.9; cursor: grab; &:active { cursor: grabbing; } }
 .cal-job--faded { opacity: 0.25; filter: grayscale(0.5); }
+.cal-job--gap { opacity: 0.35; cursor: default; pointer-events: none; }
 .cal-job-title { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cal-job-qty { font-size: 8px; opacity: 0.8; margin-left: 4px; flex-shrink: 0; }
 .cal-resize-handle {
