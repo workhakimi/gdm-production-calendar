@@ -237,6 +237,11 @@
               <div v-if="editStartDateChanged" class="edit-warn-msg">Changing the start date will update the booking creation timestamp, causing you to lose your current booking priority.</div>
             </div>
 
+            <!-- BD disconnected warning -->
+            <div v-if="selectedJobData.bd_number && !selectedBdBatch" class="bd-warn">
+              This BD Number ({{ selectedJobData.bd_number }}) is no longer connected to an order plan. Please reconnect.
+            </div>
+
             <!-- BD Batch Details -->
             <template v-if="selectedBdBatch">
               <div class="section-heading">Order Details ({{ selectedJobData.bd_number }})</div>
@@ -1284,6 +1289,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-value--computed { color: $green; font-weight: 700; }
 .edit-drag-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-top: 6px; }
 .edit-warn-msg { font-size: 10px; color: $red; font-style: italic; margin-top: 4px; }
+.bd-warn { font-size: 11px; color: $amber; background: $amber-50; border: 1px solid $amber; border-radius: 3px; padding: 6px 10px; margin-top: 8px; }
 .edit-input {
   padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
   outline: none; color: $gray-900; background: $white;
