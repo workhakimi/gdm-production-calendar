@@ -59,6 +59,7 @@
           :class="{
             'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft && !seg.isGap,
+            'cal-job--editable': !seg.isGap && editMode && seg.jobId === selectedJobId,
             'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
               || (editMode && !editStartDateChanged && !seg.isGap && seg.jobId !== selectedJobId),
             'cal-job--gap': seg.isGap,
@@ -67,10 +68,10 @@
           @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
           @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
         >
-          <div v-if="!seg.isGap && seg.isDraft && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
+          <div v-if="!seg.isGap && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
           <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
           <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <div v-if="!seg.isGap && seg.isDraft && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+          <div v-if="!seg.isGap && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
         </div>
       </div>
     </div>
@@ -991,8 +992,9 @@ export default {
     }
 
     function handleJobMousedown(event, seg) {
-      if (!seg.isDraft) return;
-      startDrag('move', event);
+      if (seg.isDraft || (editMode.value && seg.jobId === selectedJobId.value)) {
+        startDrag('move', event);
+      }
     }
     function handleResizeStart(event, dir) {
       startDrag(dir === 'left' ? 'resize-left' : 'resize-right', event);
@@ -1196,6 +1198,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 }
 .cal-job--selected { outline: 2px solid $gray-900; outline-offset: -1px; z-index: 8; }
 .cal-job--draft { border: 1.5px dashed rgba(255,255,255,0.7); opacity: 0.9; cursor: grab; &:active { cursor: grabbing; } }
+.cal-job--editable { cursor: grab; &:active { cursor: grabbing; } }
 .cal-job--faded { opacity: 0.25; filter: grayscale(0.5); }
 .cal-job--gap { opacity: 0.35; cursor: default; pointer-events: none; }
 .cal-job-title { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
