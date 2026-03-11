@@ -99,14 +99,17 @@
             <div class="section-heading">Job Timeline</div>
             <div class="tl-track">
               <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step"
-                :class="{ 'tl-step--done': jobStageIndex > i, 'tl-step--active': jobStageIndex === i && activeStageIdx === i, 'tl-step--picked': activeStageIdx === i && activeStageIdx !== jobStageIndex }"
+                :class="[
+                  'tl-step--' + stageStates[i],
+                  { 'tl-step--picked': activeStageIdx === i && activeStageIdx !== jobStageIndex }
+                ]"
                 @click="selectStage(i)"
               >
                 <div class="tl-bar">
                   <div class="tl-dot"></div>
-                  <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
+                  <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': stageStates[i] === 'done' || stageStates[i] === 'warn' }"></div>
                 </div>
-                <span class="tl-label">{{ jobStageIndex > i ? step.done : step.pending }}</span>
+                <span class="tl-label">{{ stageStates[i] === 'warn' ? step.warn : (stageStates[i] === 'done' ? step.done : step.pending) }}</span>
               </div>
             </div>
 
@@ -428,12 +431,12 @@ const TABS = [
   { key: 'capacity', label: 'Manage Capacity' },
 ];
 const STAGES = [
-  { key: 'created', done: 'Created', pending: 'Created' },
-  { key: 'connected', done: 'Connected', pending: 'Pending Connection' },
-  { key: 'arrived', done: 'Arrived', pending: 'Pending Arrival' },
-  { key: 'started', done: 'Started', pending: 'Pending Start' },
-  { key: 'completed', done: 'Completed', pending: 'Pending Completion' },
-  { key: 'checkout', done: 'Checked Out', pending: 'Pending Checkout' },
+  { key: 'created', done: 'Created', pending: 'Created', warn: 'Created' },
+  { key: 'connected', done: 'Connected', pending: 'Pending Connection', warn: 'Connection Lost' },
+  { key: 'arrived', done: 'Arrived', pending: 'Pending Arrival', warn: 'Arrival Issue' },
+  { key: 'started', done: 'Started', pending: 'Pending Start', warn: 'Start Issue' },
+  { key: 'completed', done: 'Completed', pending: 'Pending Completion', warn: 'Completion Issue' },
+  { key: 'checkout', done: 'Checked Out', pending: 'Pending Checkout', warn: 'Checkout Issue' },
 ];
 
 function parseDate(str) {
@@ -892,6 +895,19 @@ export default {
       return 1;
     });
 
+    // Per-stage state: 'done' (green), 'warn' (yellow), 'active' (blue), 'pending' (grey)
+    const stageStates = computed(() => {
+      const j = selectedJobData.value;
+      if (!j) return STAGES.map(() => 'pending');
+      const si = jobStageIndex.value;
+      return STAGES.map((step, i) => {
+        if (i >= si) return i === si ? 'active' : 'pending';
+        // Past stages — check for issues
+        if (step.key === 'connected' && j.bd_number && !selectedBdBatch.value) return 'warn';
+        return 'done';
+      });
+    });
+
     // Selected timeline step (for editing milestones out of order)
     const selectedStageIdx = ref(null); // null = follow current stage
     const activeStageIdx = computed(() => selectedStageIdx.value !== null ? selectedStageIdx.value : jobStageIndex.value);
@@ -1130,7 +1146,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, stageStates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
@@ -1265,9 +1281,13 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .tl-step { cursor: pointer; &:hover .tl-dot { transform: scale(1.2); } }
-.tl-step--done .tl-dot { background: $gray-900; border-color: $gray-900; }
+.tl-step--done .tl-dot { background: $green; border-color: $green; }
+.tl-step--done .tl-label { color: $green; }
+.tl-step--warn .tl-dot { background: $amber; border-color: $amber; }
+.tl-step--warn .tl-label { color: $amber; font-weight: 700; }
 .tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 2px rgba($blue, 0.2); }
 .tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
+.tl-step--pending .tl-dot { background: $gray-300; border-color: $gray-300; }
 .tl-step--picked .tl-dot { background: $white; border-color: $gray-700; box-shadow: 0 0 0 2px rgba($gray-700, 0.25); }
 .tl-step--picked .tl-label { color: $gray-700; font-weight: 700; }
 
