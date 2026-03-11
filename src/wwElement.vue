@@ -50,31 +50,29 @@
         </div>
       </div>
 
-      <!-- Job bars overlay -->
-      <div class="cal-jobs-layer" :style="jobsLayerStyle">
-        <div
-          v-for="seg in allSegments"
-          :key="seg.key"
-          class="cal-job-bar"
-          :class="{
-            'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
-            'cal-job--draft': seg.isDraft && !seg.isGap,
-            'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
-            'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
-              || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
-            'cal-job--gap': seg.isGap,
-            'cal-job--delay': seg.isDelay,
-          }"
-          :style="segmentStyle(seg)"
-          @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
-          @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
-        >
-          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-          <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
-          <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
-          <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
-        </div>
+      <!-- Job bars (direct grid children, explicitly placed) -->
+      <div
+        v-for="seg in allSegments"
+        :key="seg.key"
+        class="cal-job-bar"
+        :class="{
+          'cal-job--selected': !seg.isGap && seg.jobId === selectedJobId,
+          'cal-job--draft': seg.isDraft && !seg.isGap,
+          'cal-job--editable': !seg.isGap && !seg.isDelay && editMode && seg.jobId === selectedJobId,
+          'cal-job--faded': (isDrafting || isRescheduling || (editMode && editStartDateChanged)) && !seg.isDraft
+            || (editMode && !editStartDateChanged && !seg.isGap && !seg.isDelay && seg.jobId !== selectedJobId),
+          'cal-job--gap': seg.isGap,
+          'cal-job--delay': seg.isDelay,
+        }"
+        :style="segmentStyle(seg)"
+        @click.stop="!seg.isGap && selectJob(seg.jobId, seg.isDraft)"
+        @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
+      >
+        <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
+        <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
+        <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
+        <div v-if="!seg.isGap && !seg.isDelay && (seg.isDraft || (editMode && seg.jobId === selectedJobId)) && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
+        <div v-if="seg.isDelay && seg.isLast && delayMode && seg.jobId === selectedJobId" class="cal-resize-handle cal-resize--right" @mousedown.stop="startDelayStretch($event)"></div>
       </div>
     </div>
 
@@ -1129,17 +1127,16 @@ export default {
     const gridStyle = computed(() => ({
       gridTemplateRows: gridRowHeights.value,
     }));
-    const jobsLayerStyle = computed(() => ({
-      display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-      gridTemplateRows: gridRowHeights.value,
-    }));
     function segmentStyle(seg) {
       const bg = seg.isGap ? '#e5e7eb' : seg.color;
       return {
         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
+        alignSelf: 'start',
         marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px',
         backgroundColor: bg,
         borderRadius: `${seg.isFirst ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isFirst ? '3px' : '0'}`,
+        zIndex: seg.isGap ? 2 : 3,
+        pointerEvents: seg.isGap ? 'none' : 'all',
       };
     }
 
@@ -1482,7 +1479,7 @@ export default {
       currentMonth, currentYear, monthLabel, activeTab, selectedJobId, gridRef,
       calendarDays, resolvedCapacity, getCapacityOverrides, hasWeekendCapacity,
       uvUsed, uvTotal, laserUsed, laserTotal,
-      allAllocations, allSegments, segmentStyle, gridStyle, jobsLayerStyle,
+      allAllocations, allSegments, segmentStyle, gridStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, stageStates, stageLabels, stageDates, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
@@ -1545,11 +1542,9 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── GRID ───
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); background: $white; min-width: 700px; }
-.cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
-  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
-  &:nth-child(7n) { border-right: none; }
+  border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); cursor: default;
 }
 .cal-day--outside { opacity: 0.3; pointer-events: none; }
 .cal-day--weekend { background: var(--cal-weekend-bg, $gray-50); }
@@ -1566,11 +1561,10 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-cap-override-tag { font-size: 7px; font-weight: 600; color: $amber; background: $amber-50; padding: 0 3px; border-radius: 2px; margin-right: 2px; }
 
 // ─── JOB BARS ───
-.cal-jobs-layer { grid-column: 1 / -1; grid-row: 1 / -1; pointer-events: none; z-index: 2; }
 .cal-job-bar {
   display: flex; align-items: center; padding: 0 5px; font-size: 9px; font-weight: 600; color: $white;
-  pointer-events: all; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  transition: opacity 0.15s, filter 0.15s; position: relative; z-index: 3; min-width: 0;
+  cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: opacity 0.15s, filter 0.15s; min-width: 0;
   &:hover { filter: brightness(1.1); z-index: 10; }
 }
 .cal-job--selected { outline: 2px solid $gray-900; outline-offset: -1px; z-index: 8; }
