@@ -19,7 +19,7 @@
     </div>
 
     <!-- ─── CALENDAR GRID ─── -->
-    <div class="cal-grid" ref="gridRef">
+    <div class="cal-grid" :class="{ 'cal-grid--dragging': dragState.active }" ref="gridRef">
       <div
         v-for="day in calendarDays"
         :key="day.dateStr"
@@ -730,11 +730,11 @@ export default {
         name: 'onJobUpdate',
         event: { value: {
           jobId: selectedJobId.value,
-          title: j?.title || '', type: j?.type || 'uv', quantity: Number(j?.quantity) || 0,
-          startDate: rescheduleJob.startDate, endDate,
-          bd_number: j?.bd_number || '', pic_id: j?.pic_id || '',
-          arrival_date: j?.arrival_date || '', completed_at: j?.completed_at || '',
-          checkout_date: j?.checkout_date || '',
+          title: j?.title || null, type: j?.type || 'uv', quantity: Number(j?.quantity) || 0,
+          startDate: rescheduleJob.startDate || null, endDate: endDate || null,
+          bd_number: j?.bd_number || null, pic_id: j?.pic_id || null,
+          arrival_date: j?.arrival_date || null, completed_at: j?.completed_at || null,
+          checkout_date: j?.checkout_date || null,
         } },
       });
       isRescheduling.value = false;
@@ -924,11 +924,11 @@ export default {
         name: 'onJobUpdate',
         event: { value: {
           jobId: selectedJobId.value,
-          title: editForm.title, type: editForm.type, quantity: editForm.quantity,
-          startDate: editForm.startDate, endDate: editPreviewEndDate.value || editForm.endDate,
-          bd_number: j.bd_number || '', pic_id: j.pic_id || '',
-          arrival_date: editForm.arrival_date, completed_at: j.completed_at || '',
-          checkout_date: editForm.checkout_date,
+          title: editForm.title || null, type: editForm.type || 'uv', quantity: editForm.quantity,
+          startDate: editForm.startDate || null, endDate: editPreviewEndDate.value || editForm.endDate || null,
+          bd_number: j.bd_number || null, pic_id: j.pic_id || null,
+          arrival_date: editForm.arrival_date || null, completed_at: j.completed_at || null,
+          checkout_date: editForm.checkout_date || null,
         } },
       });
       editMode.value = false;
@@ -956,7 +956,7 @@ export default {
       const endDate = draftEndDateRaw.value;
       emit('trigger-event', {
         name: 'onJobCreate',
-        event: { value: { title: draftJob.title, type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, endDate, bd_number: draftJob.bd_number || '', pic_id: draftJob.pic_id || '' } },
+        event: { value: { title: draftJob.title || null, type: draftJob.type || 'uv', quantity: draftJob.quantity, startDate: draftJob.startDate || null, endDate: endDate || null, bd_number: draftJob.bd_number || null, pic_id: draftJob.pic_id || null } },
       });
       if (draftJob.bd_number) {
         const opt = bdOptions.value.find(o => o.bd_number === draftJob.bd_number);
@@ -967,17 +967,12 @@ export default {
 
     // ─── DRAG & DROP ───
     const dragState = reactive({ active: false, mode: null, lastDate: '', anchorEnd: '' });
-    let jobsLayerEl = null;
 
     function startDrag(mode, event) {
       dragState.active = true;
       dragState.mode = mode;
       dragState.lastDate = '';
-      // Snapshot end date before drag starts (for resize-left)
       dragState.anchorEnd = draftEndDateRaw.value;
-      // Disable pointer events on job bars so elementFromPoint hits day cells
-      jobsLayerEl = gridRef.value?.querySelector('.cal-jobs-layer');
-      if (jobsLayerEl) jobsLayerEl.style.pointerEvents = 'none';
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragEnd);
       event.preventDefault();
@@ -1020,7 +1015,8 @@ export default {
     function onDragMove(event) {
       if (!dragState.active) return;
       const ds = getDayFromPoint(event.clientX, event.clientY);
-      if (!ds || ds === dragState.lastDate) return;
+      if (!ds) return;
+      if (ds === dragState.lastDate && dragState.mode === 'move') return;
       dragState.lastDate = ds;
 
       const t = dragTarget.value;
@@ -1046,7 +1042,6 @@ export default {
     function onDragEnd() {
       dragState.active = false;
       dragState.lastDate = '';
-      if (jobsLayerEl) { jobsLayerEl.style.pointerEvents = ''; jobsLayerEl = null; }
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
     }
@@ -1078,7 +1073,7 @@ export default {
       if (!canSubmitCapacity.value) return;
       emit('trigger-event', {
         name: 'onCapacityCreate',
-        event: { value: { title: capForm.title, ruleType: capForm.ruleType, custType: capForm.custType, quantity: capForm.quantity, startDate: capForm.ruleType === 'general' ? capForm.startDate : '', endDate: capForm.ruleType === 'general' ? capForm.endDate : '', month: capForm.ruleType === 'default' ? capForm.month : '' } },
+        event: { value: { title: capForm.title || null, ruleType: capForm.ruleType, custType: capForm.custType, quantity: capForm.quantity, startDate: capForm.ruleType === 'general' ? capForm.startDate || null : null, endDate: capForm.ruleType === 'general' ? capForm.endDate || null : null, month: capForm.ruleType === 'default' ? capForm.month || null : null } },
       });
       Object.assign(capForm, { title: '', ruleType: 'default', custType: 'uv', quantity: 100, month: '', startDate: '', endDate: '' });
     }
@@ -1159,6 +1154,8 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── GRID ───
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; min-width: 700px; }
+.cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
+.cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
   min-height: 80px; border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
   &:nth-child(7n) { border-right: none; }
