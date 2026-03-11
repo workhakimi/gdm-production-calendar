@@ -1134,7 +1134,7 @@ export default {
       }
       return tops;
     });
-    const gridRowHeights = computed(() => weekRowPx.value.map(h => `minmax(${h}px, ${h}fr)`).join(' '));
+    const gridRowHeights = computed(() => weekRowPx.value.map(h => `${h}px`).join(' '));
     const gridStyle = computed(() => ({
       gridTemplateRows: gridRowHeights.value,
     }));
@@ -1556,7 +1556,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; min-width: 700px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; min-width: 700px; }
 .cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
@@ -1819,13 +1819,4 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-cap-meta { color: $gray-500; flex: 1; }
 .cal-cap-qty { font-weight: 600; color: $gray-700; }
 
-// ─── RESPONSIVE ───
-@media (max-width: 900px) { .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 600px) {
-  .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr; }
-  .cal-cap-badge { font-size: 7px; }
-  .cal-header { padding: 6px 8px; }
-  .cal-day-cell { /* height controlled by gridStyle */ }
-  .tl-label { font-size: 7px; }
-}
 </style>
