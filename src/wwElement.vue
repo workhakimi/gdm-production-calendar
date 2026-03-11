@@ -226,7 +226,7 @@
               </div>
               <div class="detail-row">
                 <div class="detail-cell"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
-                <div class="detail-cell"><label class="edit-label">End Date</label><input v-if="canEditEndDate" class="edit-input" type="date" v-model="editForm.endDate" /><span v-else class="edit-value">{{ fmtDate(editForm.endDate) }} <span class="edit-hint">(computed)</span></span></div>
+                <div class="detail-cell"><label class="edit-label">End Date</label><input v-if="canEditEndDate" class="edit-input" type="date" v-model="editForm.endDate" /><span v-else class="edit-value edit-value--computed">{{ fmtDate(editPreviewEndDate || editForm.endDate) }}</span></div>
                 <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
                 <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
               </div>
@@ -634,6 +634,7 @@ export default {
     const draftEndDate = computed(() => { const e = fullResult.value.jobEndDates['__draft__']; return e ? fmtDate(e) : ''; });
     const draftEndDateRaw = computed(() => fullResult.value.jobEndDates['__draft__'] || '');
     const rescheduleEndDate = computed(() => draftEndDate.value);
+    const editPreviewEndDate = computed(() => editMode.value ? draftEndDateRaw.value : '');
     const draftDaysRequired = computed(() => {
       if (!draftEndDateRaw.value || !draftJob.startDate) return '–';
       const s = parseDate(draftJob.startDate), e = parseDate(draftEndDateRaw.value);
@@ -881,7 +882,7 @@ export default {
         event: { value: {
           jobId: selectedJobId.value,
           title: editForm.title, type: editForm.type, quantity: editForm.quantity,
-          startDate: editForm.startDate, endDate: editForm.endDate,
+          startDate: editForm.startDate, endDate: editPreviewEndDate.value || editForm.endDate,
           bd_number: j.bd_number || '', pic_id: j.pic_id || '',
           arrival_date: editForm.arrival_date, completed_at: j.completed_at || '',
           checkout_date: editForm.checkout_date,
@@ -1037,7 +1038,7 @@ export default {
       prevMonth, nextMonth, prevYear, nextYear, goToday,
       selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
-      editMode, editForm, editStartDateChanged, enterEditMode, cancelEditMode, saveEditMode,
+      editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
       isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
@@ -1200,6 +1201,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; }
 .edit-value { font-size: 12px; font-weight: 500; color: $gray-800; }
 .edit-hint { font-size: 9px; color: $gray-400; font-weight: 400; font-style: italic; }
+.edit-value--computed { color: $green; font-weight: 700; }
 .edit-drag-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-top: 6px; }
 .edit-warn-msg { font-size: 10px; color: $red; font-style: italic; margin-top: 4px; }
 .edit-input {
