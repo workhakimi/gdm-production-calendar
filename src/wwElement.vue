@@ -490,32 +490,23 @@
             <div
               v-for="job in filteredBookings"
               :key="job.id"
-              class="bl-card"
-              :class="{ 'bl-card--selected': job.id === selectedJobId }"
+              class="bl-row"
+              :class="{ 'bl-row--selected': job.id === selectedJobId }"
               @click="selectJob(job.id, false)"
             >
-              <div class="bl-card-header">
-                <span class="bl-card-title">{{ job.title }}</span>
-                <span class="type-tag type-tag--sm" :class="'type-tag--' + (job.type || 'uv')">{{ job.type === 'laser' ? 'Laser' : 'UV' }}</span>
-                <span class="bl-card-qty">{{ job.quantity }}</span>
-                <span v-if="job.pic_id" class="bl-card-pic">{{ getTeammateName(job.pic_id) }}</span>
-              </div>
-              <div class="bl-card-dates">
-                <span>{{ fmtDate(job.startDate) }} → {{ fmtDate((job.endDate || '').split('T')[0]) }}</span>
-                <span v-if="job.endDate_delay" class="bl-card-delay">Delayed: {{ fmtDate((job.endDate_delay || '').split('T')[0]) }}</span>
-                <span v-if="job.bd_number" class="bl-card-bd">BD# {{ job.bd_number }}</span>
-              </div>
+              <span class="bl-title">{{ job.title }}</span>
+              <span class="type-tag type-tag--sm" :class="'type-tag--' + (job.type || 'uv')">{{ job.type === 'laser' ? 'L' : 'UV' }}</span>
+              <span class="bl-dates">{{ fmtDate(job.startDate) }} — {{ fmtDate((job.endDate || '').split('T')[0]) }}</span>
+              <span v-if="job.endDate_delay" class="bl-delay">→ {{ fmtDate((job.endDate_delay || '').split('T')[0]) }}</span>
+              <span v-if="job.bd_number" class="bl-bd">BD# {{ job.bd_number }}</span>
               <div class="bl-tl-track">
-                <div
-                  v-for="(step, i) in STAGES"
-                  :key="step.key"
-                  class="bl-tl-step"
-                  :class="'bl-tl--' + getJobStageState(job, i)"
-                >
+                <div v-for="(step, i) in STAGES" :key="step.key" class="bl-tl-step" :class="'bl-tl--' + getJobStageState(job, i)">
                   <div class="bl-tl-dot"></div>
                   <div v-if="i < STAGES.length - 1" class="bl-tl-line" :class="{ 'bl-tl-line--done': getJobStageState(job, i) === 'done' || getJobStageState(job, i) === 'warn' || getJobStageState(job, i) === 'current' }"></div>
                 </div>
               </div>
+              <span class="bl-qty">×{{ job.quantity }}</span>
+              <span v-if="job.pic_id" class="bl-pic">{{ getTeammateName(job.pic_id) }}</span>
             </div>
           </div>
         </div>
@@ -2042,28 +2033,27 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 // ─── BOOKINGS LIST ───
 .bl-filters { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
 .bl-count { margin-left: auto; font-size: 10px; color: $gray-400; font-weight: 600; }
-.bl-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
-.bl-card {
-  background: #fff; border: 1px solid $gray-200; border-radius: 4px; padding: 7px 9px; cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  &:hover { border-color: $blue; }
+.bl-list { display: flex; flex-direction: column; gap: 0; max-height: 340px; overflow-y: auto; border-top: 1px solid $gray-200; }
+.bl-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer;
+  border-bottom: 1px solid $gray-100; transition: background 0.1s;
+  &:hover { background: $gray-50; }
 }
-.bl-card--selected { border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.15); background: rgba($blue, 0.02); }
-.bl-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-.bl-card-title { font-size: 11px; font-weight: 700; color: $gray-800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-.bl-card-qty { font-size: 10px; font-weight: 600; color: $gray-500; margin-left: auto; &::before { content: '×'; } }
-.bl-card-pic { font-size: 9px; color: $gray-400; font-weight: 500; }
-.bl-card-dates { display: flex; align-items: center; gap: 8px; font-size: 10px; color: $gray-500; margin-bottom: 5px; }
-.bl-card-delay { color: $amber; font-weight: 600; }
-.bl-card-bd { color: $gray-400; font-weight: 600; font-family: monospace; font-size: 9px; }
-.bl-tl-track { display: flex; align-items: center; gap: 0; padding: 2px 0; }
+.bl-row--selected { background: rgba($blue, 0.04); border-left: 2px solid $blue; padding-left: 6px; }
+.bl-title { font-size: 11px; font-weight: 700; color: $gray-800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 60px; max-width: 140px; }
+.bl-dates { font-size: 10px; color: $gray-500; white-space: nowrap; }
+.bl-delay { font-size: 10px; color: $amber; font-weight: 600; white-space: nowrap; }
+.bl-bd { font-size: 9px; color: $gray-400; font-weight: 600; font-family: monospace; white-space: nowrap; }
+.bl-qty { font-size: 10px; font-weight: 600; color: $gray-500; white-space: nowrap; margin-left: auto; }
+.bl-pic { font-size: 9px; color: $gray-400; font-weight: 500; white-space: nowrap; }
+.bl-tl-track { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
 .bl-tl-step { display: flex; align-items: center; }
-.bl-tl-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid $gray-300; background: #fff; flex-shrink: 0; }
-.bl-tl-line { width: 16px; height: 1.5px; background: $gray-200; flex-shrink: 0; }
+.bl-tl-dot { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid $gray-300; background: #fff; flex-shrink: 0; }
+.bl-tl-line { width: 10px; height: 1.5px; background: $gray-200; flex-shrink: 0; }
 .bl-tl-line--done { background: $green; }
 .bl-tl--done .bl-tl-dot { background: $green; border-color: $green; }
 .bl-tl--warn .bl-tl-dot { background: $amber; border-color: $amber; }
-.bl-tl--active .bl-tl-dot { background: $blue; border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.2); }
+.bl-tl--active .bl-tl-dot { background: $blue; border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.15); }
 .bl-tl--current .bl-tl-dot { background: $gray-800; border-color: $gray-800; }
 .bl-tl--pending .bl-tl-dot { background: #fff; border-color: $gray-300; }
 
