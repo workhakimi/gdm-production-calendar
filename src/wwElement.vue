@@ -93,6 +93,7 @@
           <div v-if="!selectedJobData" class="cal-empty-tab">Click a job on the calendar to view details.</div>
           <template v-else>
             <!-- ── TIMELINE ── -->
+            <div class="section-heading">Job Timeline</div>
             <div class="tl-track">
               <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex > i, 'tl-step--active': jobStageIndex === i }">
                 <div class="tl-bar">
@@ -1233,7 +1234,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-400; margin: 12px 0 6px;
   display: flex; align-items: center; gap: 6px;
 }
-.detail-heading { margin-top: 0; justify-content: space-between; }
+.detail-heading { margin-top: 16px; padding-top: 10px; border-top: 1px solid $gray-200; justify-content: space-between; }
 .detail-heading-actions { display: flex; gap: 4px; margin-left: auto; }
 .cap-list-heading { margin-top: 16px; }
 
