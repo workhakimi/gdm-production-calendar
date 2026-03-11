@@ -1682,6 +1682,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 }
 .cal-day--outside { opacity: 0.3; pointer-events: none; }
 .cal-day--weekend { background: var(--cal-weekend-bg, $gray-50); }
+.cal-day--today { background: rgba($blue, 0.06); }
 .cal-day--today .cal-day-num { color: var(--cal-accent); font-weight: 800; }
 .cal-day-header { display: flex; align-items: center; gap: 3px; padding: 2px 5px; border-bottom: 1px solid $gray-100; min-height: 22px; }
 .cal-day-num { font-size: 11px; font-weight: 600; color: $gray-700; }
