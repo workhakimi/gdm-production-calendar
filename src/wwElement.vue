@@ -1544,7 +1544,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; min-width: 700px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); background: $white; min-width: 700px; }
 .cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
@@ -1566,7 +1566,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-cap-override-tag { font-size: 7px; font-weight: 600; color: $amber; background: $amber-50; padding: 0 3px; border-radius: 2px; margin-right: 2px; }
 
 // ─── JOB BARS ───
-.cal-jobs-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 2; }
+.cal-jobs-layer { grid-column: 1 / -1; grid-row: 1 / -1; pointer-events: none; z-index: 2; }
 .cal-job-bar {
   display: flex; align-items: center; padding: 0 5px; font-size: 9px; font-weight: 600; color: $white;
   pointer-events: all; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
