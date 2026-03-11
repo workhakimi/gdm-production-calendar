@@ -10,6 +10,9 @@
       <button class="cal-nav-btn cal-today-btn" @click="goToday">Today</button>
     </div>
 
+    <!-- ─── CALENDAR SCROLL WRAPPER ─── -->
+    <div class="cal-scroll">
+
     <!-- ─── DAY-OF-WEEK ROW ─── -->
     <div class="cal-dow-row">
       <div v-for="d in DOW" :key="d" class="cal-dow-cell">{{ d }}</div>
@@ -33,7 +36,7 @@
         <div class="cal-day-header">
           <span class="cal-day-num">{{ day.dayNum }}</span>
           <span v-if="day.dayNum === 1 || day.idx === 0" class="cal-day-month">{{ day.monthShort }}</span>
-          <span class="cal-cap-badges">
+          <span v-if="!day.isWeekend || hasWeekendCapacity(day.dateStr)" class="cal-cap-badges">
             <span class="cal-cap-badge cal-cap--uv" :class="{ 'cal-cap--over': uvUsed(day) > uvTotal(day) }">
               UV {{ uvUsed(day) }}/{{ uvTotal(day) }}
             </span>
@@ -69,6 +72,8 @@
         </div>
       </div>
     </div>
+
+    </div><!-- /cal-scroll -->
 
     <!-- ─── BOTTOM PANEL ─── -->
     <div class="cal-panel">
@@ -545,6 +550,7 @@ export default {
       return cap;
     }
     function getCapacityOverrides(dateStr) { return resolvedCapacity.value.filter(r => r.ruleType === 'general' && dateStr >= r.startDate && dateStr <= r.endDate); }
+    function hasWeekendCapacity(dateStr) { return resolvedCapacity.value.some(r => r.ruleType === 'general' && dateStr >= r.startDate && dateStr <= r.endDate); }
     function uvUsed(day) { return (allAllocations.value[day.dateStr] || []).filter(a => a.type === 'uv').reduce((s, a) => s + a.qty, 0); }
     function uvTotal(day) { return getCapacityForDate(day.dateStr, 'uv'); }
     function laserUsed(day) { return (allAllocations.value[day.dateStr] || []).filter(a => a.type === 'laser').reduce((s, a) => s + a.qty, 0); }
@@ -1008,7 +1014,7 @@ export default {
     return {
       DOW, TABS, STAGES,
       currentMonth, currentYear, monthLabel, activeTab, selectedJobId, gridRef,
-      calendarDays, resolvedCapacity, getCapacityOverrides,
+      calendarDays, resolvedCapacity, getCapacityOverrides, hasWeekendCapacity,
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
@@ -1059,12 +1065,15 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 }
 .cal-today-btn { margin-left: auto; }
 
+// ─── SCROLL WRAPPER ───
+.cal-scroll { overflow-x: auto; flex: 1; }
+
 // ─── DAY-OF-WEEK ───
-.cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); background: $gray-50; border-bottom: 1px solid var(--cal-border); }
+.cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); background: $gray-50; border-bottom: 1px solid var(--cal-border); min-width: 700px; }
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; min-width: 700px; }
 .cal-day-cell {
   min-height: 80px; border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
   &:nth-child(7n) { border-right: none; }
