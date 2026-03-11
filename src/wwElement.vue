@@ -746,8 +746,7 @@ export default {
     const stageEditing = ref(null); // which stage index is being edited (null = none)
     function startStageEdit(idx) { stageEditing.value = idx; }
     function cancelStageEdit() { stageEditing.value = null; stageBdSelected.value = null; stageBdSearch.value = ''; }
-    watch(selectedJobId, () => { stageEditing.value = null; });
-    watch(activeStageIdx, () => { stageEditing.value = null; });
+    // watches moved after activeStageIdx definition
 
     const stageArrivalDate = ref('');
     const stageCompleteDate = ref('');
@@ -960,8 +959,9 @@ export default {
       if (i === jobStageIndex.value) { selectedStageIdx.value = null; return; }
       selectedStageIdx.value = i;
     }
-    // Reset when job changes
-    watch(selectedJobId, () => { selectedStageIdx.value = null; });
+    // Reset when job or stage changes
+    watch(selectedJobId, () => { selectedStageIdx.value = null; stageEditing.value = null; });
+    watch(activeStageIdx, () => { stageEditing.value = null; });
 
     const jobHasStarted = computed(() => {
       const j = selectedJobData.value;
