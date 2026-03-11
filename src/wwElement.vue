@@ -67,8 +67,8 @@
           @mousedown.stop="!seg.isGap && handleJobMousedown($event, seg)"
         >
           <div v-if="!seg.isGap && seg.isDraft && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
-          <span v-if="!seg.isGap && seg.isFirst" class="cal-job-title">{{ seg.title }}</span>
-          <span v-if="!seg.isGap && seg.isLast" class="cal-job-qty">{{ seg.totalQty }}</span>
+          <span v-if="!seg.isGap && seg.showLabel" class="cal-job-title">{{ seg.title }}</span>
+          <span v-if="!seg.isGap && (seg.isLast || seg.showLabel)" class="cal-job-qty">{{ seg.totalQty }}</span>
           <div v-if="!seg.isGap && seg.isDraft && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
         </div>
       </div>
@@ -802,9 +802,12 @@ export default {
 
         // Build sub-segments per week: split into active (colored) and gap (grey) runs
         const isFirstWeek = weekKeys[0], isLastWeek = weekKeys[weekKeys.length - 1];
+        let prevWasGap = false;
         for (const wi of weekKeys) {
           const sp = weekSpans[wi];
           let curType = null, curStart = sp.min;
+          const isNewWeek = wi !== isFirstWeek;
+          let firstActiveInWeek = true;
           for (let di = sp.min; di <= sp.max + 1; di++) {
             const dayIdx = wi * 7 + di;
             const isActive = di <= sp.max && activeDays.has(dayIdx);
@@ -812,14 +815,18 @@ export default {
             if (di > sp.max || (curType !== null && segType !== curType)) {
               // Flush current run
               const endCol = di - 1;
-              const isJobFirst = wi === isFirstWeek && curStart === sp.min;
+              const isJobFirst = wi === isFirstWeek && curStart === sp.min && !prevWasGap;
               const isJobLast = wi === isLastWeek && endCol === sp.max;
+              // Show label on first active segment of each week or after a gap
+              const showLabel = curType === 'active' && (isJobFirst || (isNewWeek && firstActiveInWeek) || prevWasGap);
               segs.push({
                 key: `${jid}-${wi}-${curStart}-${curType}`, jobId: jid, title: ji.title, type: ji.type,
                 totalQty: ji.totalQty, color: curType === 'active' ? col : null, isGap: curType === 'gap',
-                isDraft: ji.isDraft, isFirst: isJobFirst, isLast: isJobLast,
+                isDraft: ji.isDraft, isFirst: isJobFirst, isLast: isJobLast, showLabel,
                 weekIndex: wi, startCol: curStart, endCol, rowIndex: ri,
               });
+              if (curType === 'active') firstActiveInWeek = false;
+              prevWasGap = curType === 'gap';
               curStart = di; curType = segType;
             } else if (curType === null) {
               curType = segType;
