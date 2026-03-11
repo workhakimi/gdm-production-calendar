@@ -1122,7 +1122,7 @@ export default {
       for (let i = 0; i < numWeeks.value; i++) {
         const jobRows = wc[i] || 0;
         const h = Math.max(80, 28 + jobRows * 22);
-        rows.push(`minmax(${h}px, 1fr)`);
+        rows.push(`${h}px`);
       }
       return rows.join(' ');
     });
@@ -1544,7 +1544,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
 // ─── GRID ───
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; min-width: 700px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; min-width: 700px; }
 .cal-grid--dragging .cal-jobs-layer { pointer-events: none !important; }
 .cal-grid--dragging .cal-job-bar { pointer-events: none !important; }
 .cal-day-cell {
