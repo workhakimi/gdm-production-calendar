@@ -923,27 +923,36 @@ export default {
     }
 
     // ─── DRAG & DROP ───
-    const dragState = reactive({ active: false, mode: null });
+    const dragState = reactive({ active: false, mode: null, lastDate: '', anchorEnd: '' });
+    let jobsLayerEl = null;
 
-    function handleJobMousedown(event, seg) {
-      if (!seg.isDraft) return;
-      dragState.active = true; dragState.mode = 'move';
+    function startDrag(mode, event) {
+      dragState.active = true;
+      dragState.mode = mode;
+      dragState.lastDate = '';
+      // Snapshot end date before drag starts (for resize-left)
+      dragState.anchorEnd = draftEndDateRaw.value;
+      // Disable pointer events on job bars so elementFromPoint hits day cells
+      jobsLayerEl = gridRef.value?.querySelector('.cal-jobs-layer');
+      if (jobsLayerEl) jobsLayerEl.style.pointerEvents = 'none';
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragEnd);
       event.preventDefault();
     }
+
+    function handleJobMousedown(event, seg) {
+      if (!seg.isDraft) return;
+      startDrag('move', event);
+    }
     function handleResizeStart(event, dir) {
-      dragState.active = true; dragState.mode = dir === 'left' ? 'resize-left' : 'resize-right';
-      document.addEventListener('mousemove', onDragMove);
-      document.addEventListener('mouseup', onDragEnd);
-      event.preventDefault();
+      startDrag(dir === 'left' ? 'resize-left' : 'resize-right', event);
     }
     function handleDayHover() {}
     function handleDayMousedown(event, day) {
       if (day.isWeekend || day.outside) return;
-      if (isDrafting.value) draftJob.startDate = day.dateStr;
-      else if (isRescheduling.value) rescheduleJob.startDate = day.dateStr;
-      else if (editMode.value) editForm.startDate = day.dateStr;
+      if (isDrafting.value) { draftJob.startDate = day.dateStr; draftJob._maxDays = 0; }
+      else if (isRescheduling.value) { rescheduleJob.startDate = day.dateStr; rescheduleJob._maxDays = 0; }
+      else if (editMode.value) { editForm.startDate = day.dateStr; editForm._maxDays = 0; }
     }
 
     // Target for drag: draftJob, rescheduleJob, or editForm
@@ -953,46 +962,61 @@ export default {
       return draftJob;
     });
 
+    function getDayFromPoint(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      const dc = el.closest('.cal-day-cell');
+      if (!dc) return null;
+      const ds = dc.dataset.date;
+      if (!ds) return null;
+      const d = parseDate(ds);
+      if (!d || isWeekend(d)) return null;
+      return ds;
+    }
+
     function onDragMove(event) {
       if (!dragState.active) return;
-      const el = document.elementFromPoint(event.clientX, event.clientY);
-      if (!el) return;
-      const dc = el.closest('.cal-day-cell');
-      if (!dc) return;
-      const ds = dc.dataset.date;
-      if (!ds) return;
-      const d = parseDate(ds);
-      if (!d || isWeekend(d)) return;
+      const ds = getDayFromPoint(event.clientX, event.clientY);
+      if (!ds || ds === dragState.lastDate) return;
+      dragState.lastDate = ds;
+
       const t = dragTarget.value;
-      if (dragState.mode === 'move') { t.startDate = ds; t._maxDays = 0; }
-      else if (dragState.mode === 'resize-right') {
-        const s = parseDate(t.startDate);
+      if (dragState.mode === 'move') {
+        t.startDate = ds;
+        t._maxDays = 0;
+      } else if (dragState.mode === 'resize-right') {
         if (ds >= t.startDate) {
-          const wd = countWorkdays(s, d);
+          const wd = countWorkdays(parseDate(t.startDate), parseDate(ds));
           const mn = computeMinDays(t.quantity, t.type, t.startDate);
           t._maxDays = Math.max(wd, mn);
         }
       } else if (dragState.mode === 'resize-left') {
-        if (ds <= draftEndDateRaw.value) {
+        const anchor = dragState.anchorEnd;
+        if (anchor && ds <= anchor) {
           t.startDate = ds;
-          const e = parseDate(draftEndDateRaw.value);
-          if (e) { const wd = countWorkdays(d, e); const mn = computeMinDays(t.quantity, t.type, ds); t._maxDays = Math.max(wd, mn); }
+          const wd = countWorkdays(parseDate(ds), parseDate(anchor));
+          const mn = computeMinDays(t.quantity, t.type, ds);
+          t._maxDays = Math.max(wd, mn);
         }
       }
     }
     function onDragEnd() {
       dragState.active = false;
+      dragState.lastDate = '';
+      if (jobsLayerEl) { jobsLayerEl.style.pointerEvents = ''; jobsLayerEl = null; }
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
     }
     function computeMinDays(qty, type, sd) {
       let rem = qty, cur = parseDate(sd), days = 0, sf = 0;
       if (!cur) return 1;
+      // Use filtered allocation (excludes the job being edited/rescheduled)
+      const am = allocateJobs(jobsForAllocation.value, null).allocMap;
       while (rem > 0 && sf < 3650) {
         sf++;
         if (isWeekend(cur)) { cur = nextDay(cur); continue; }
         const ds = toDateStr(cur), tc = getCapacityForDate(ds, type);
-        const used = (baseResult.value.allocMap[ds] || []).filter(a => a.type === type).reduce((s, a) => s + a.qty, 0);
+        const used = (am[ds] || []).filter(a => a.type === type).reduce((s, a) => s + a.qty, 0);
         const avail = Math.max(0, tc - used);
         if (avail > 0) { rem -= avail; days++; }
         cur = nextDay(cur);
