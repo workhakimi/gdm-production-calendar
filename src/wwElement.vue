@@ -98,7 +98,10 @@
             <!-- ── TIMELINE ── -->
             <div class="section-heading">Job Timeline</div>
             <div class="tl-track">
-              <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex > i, 'tl-step--active': jobStageIndex === i }">
+              <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step"
+                :class="{ 'tl-step--done': jobStageIndex > i, 'tl-step--active': jobStageIndex === i && activeStageIdx === i, 'tl-step--picked': activeStageIdx === i && activeStageIdx !== jobStageIndex }"
+                @click="selectStage(i)"
+              >
                 <div class="tl-bar">
                   <div class="tl-dot"></div>
                   <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
@@ -110,7 +113,7 @@
             <!-- ── STAGE ACTION PANEL ── -->
             <div class="stage-panel">
               <!-- Stage 1: Connected — BD input -->
-              <template v-if="jobStageIndex === 1">
+              <template v-if="activeStageIdx === 1">
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span class="stage-inline-label">BD#</span>
@@ -134,7 +137,7 @@
               </template>
 
               <!-- Stage 2: Arrival — date input -->
-              <template v-if="jobStageIndex === 2">
+              <template v-if="activeStageIdx === 2">
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span class="stage-inline-label">Arrival</span>
@@ -145,7 +148,7 @@
               </template>
 
               <!-- Stage 3: Started / Pending Start + Manual Complete -->
-              <template v-if="jobStageIndex === 3 || jobStageIndex === 4">
+              <template v-if="activeStageIdx === 3 || activeStageIdx === 4">
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span v-if="!jobHasStarted" class="stage-inline-hint">Pending — starts {{ fmtDate(selectedJobData.startDate) }}</span>
@@ -175,7 +178,7 @@
               </template>
 
               <!-- Stage 5: Checkout -->
-              <template v-if="jobStageIndex === 5">
+              <template v-if="activeStageIdx === 5">
                 <div class="stage-action">
                   <div class="stage-inline">
                     <span class="stage-inline-label">Checkout</span>
@@ -414,7 +417,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -889,6 +892,16 @@ export default {
       return 1;
     });
 
+    // Selected timeline step (for editing milestones out of order)
+    const selectedStageIdx = ref(null); // null = follow current stage
+    const activeStageIdx = computed(() => selectedStageIdx.value !== null ? selectedStageIdx.value : jobStageIndex.value);
+    function selectStage(i) {
+      if (i === jobStageIndex.value) { selectedStageIdx.value = null; return; }
+      selectedStageIdx.value = i;
+    }
+    // Reset when job changes
+    watch(selectedJobId, () => { selectedStageIdx.value = null; });
+
     const jobHasStarted = computed(() => {
       const j = selectedJobData.value;
       return j?.startDate && todayStr >= j.startDate;
@@ -1117,7 +1130,7 @@ export default {
       uvUsed, uvTotal, laserUsed, laserTotal,
       allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, canEditEndDate, jobAutoCompleted,
+      selectedJobData, selectedBdBatch, jobStageIndex, activeStageIdx, selectStage, jobHasStarted, canEditEndDate, jobAutoCompleted,
       selectJob, emitJobDelete,
       editMode, editForm, editStartDateChanged, editPreviewEndDate, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
@@ -1251,9 +1264,12 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
   text-transform: uppercase; letter-spacing: 0.03em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
+.tl-step { cursor: pointer; &:hover .tl-dot { transform: scale(1.2); } }
 .tl-step--done .tl-dot { background: $gray-900; border-color: $gray-900; }
 .tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 2px rgba($blue, 0.2); }
 .tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
+.tl-step--picked .tl-dot { background: $white; border-color: $gray-700; box-shadow: 0 0 0 2px rgba($gray-700, 0.25); }
+.tl-step--picked .tl-label { color: $gray-700; font-weight: 700; }
 
 // ─── STAGE PANEL ───
 .stage-panel { margin-bottom: 8px; }
