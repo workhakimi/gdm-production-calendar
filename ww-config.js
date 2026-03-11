@@ -19,7 +19,7 @@ export default {
     {
       name: 'onJobCreate',
       label: { en: 'On job create' },
-      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', dailyAllocation: [], bd_number: '' } },
+      event: { value: { title: '', type: '', quantity: 0, startDate: '', endDate: '', dailyAllocation: [], bd_number: '', pic_id: '' } },
       default: true,
     },
     {
@@ -41,6 +41,21 @@ export default {
       name: 'onJobConnectBd',
       label: { en: 'On job connect BD' },
       event: { value: { jobId: null, bd_number: '', batch_key: '', line_ids: [] } },
+    },
+    {
+      name: 'onJobArrival',
+      label: { en: 'On job arrival' },
+      event: { value: { jobId: null, arrival_date: '' } },
+    },
+    {
+      name: 'onJobComplete',
+      label: { en: 'On job complete' },
+      event: { value: { jobId: null, completed_at: '' } },
+    },
+    {
+      name: 'onJobCheckout',
+      label: { en: 'On job checkout' },
+      event: { value: { jobId: null, checkout_date: '' } },
     },
     {
       name: 'onCapacityCreate',
@@ -71,7 +86,7 @@ export default {
       bindable: true,
       defaultValue: [],
       bindingValidation: {
-        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, color, bd_number, status, created_at, arrival_date, checkout_date }',
+        tooltip: 'Array of { id, title, type (uv|laser), quantity, startDate, endDate, color, bd_number, pic_id, created_at, arrival_date, completed_at, checkout_date }',
       },
     },
     capacityData: {

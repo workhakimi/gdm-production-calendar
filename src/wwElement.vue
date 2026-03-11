@@ -17,7 +17,6 @@
 
     <!-- ─── CALENDAR GRID ─── -->
     <div class="cal-grid" ref="gridRef">
-      <!-- Day cells -->
       <div
         v-for="day in calendarDays"
         :key="day.dateStr"
@@ -43,11 +42,8 @@
             </span>
           </span>
         </div>
-        <!-- capacity override indicator -->
         <div v-if="getCapacityOverrides(day.dateStr).length" class="cal-cap-overrides">
-          <span v-for="ov in getCapacityOverrides(day.dateStr)" :key="ov.id" class="cal-cap-override-tag">
-            {{ ov.title }}
-          </span>
+          <span v-for="ov in getCapacityOverrides(day.dateStr)" :key="ov.id" class="cal-cap-override-tag">{{ ov.title }}</span>
         </div>
       </div>
 
@@ -60,28 +56,16 @@
           :class="{
             'cal-job--selected': seg.jobId === selectedJobId,
             'cal-job--draft': seg.isDraft,
-            'cal-job--faded': isDrafting && !seg.isDraft,
-            'cal-job--uv': seg.type === 'uv',
-            'cal-job--laser': seg.type === 'laser',
-            'cal-job--first': seg.isFirst,
-            'cal-job--last': seg.isLast,
+            'cal-job--faded': (isDrafting || isRescheduling) && !seg.isDraft,
           }"
           :style="segmentStyle(seg)"
           @click.stop="selectJob(seg.jobId, seg.isDraft)"
           @mousedown.stop="handleJobMousedown($event, seg)"
         >
-          <div
-            v-if="seg.isDraft && seg.isFirst"
-            class="cal-resize-handle cal-resize--left"
-            @mousedown.stop="handleResizeStart($event, 'left')"
-          ></div>
+          <div v-if="seg.isDraft && seg.isFirst" class="cal-resize-handle cal-resize--left" @mousedown.stop="handleResizeStart($event, 'left')"></div>
           <span v-if="seg.isFirst" class="cal-job-title">{{ seg.title }}</span>
           <span v-if="seg.isLast" class="cal-job-qty">{{ seg.totalQty }}</span>
-          <div
-            v-if="seg.isDraft && seg.isLast"
-            class="cal-resize-handle cal-resize--right"
-            @mousedown.stop="handleResizeStart($event, 'right')"
-          ></div>
+          <div v-if="seg.isDraft && seg.isLast" class="cal-resize-handle cal-resize--right" @mousedown.stop="handleResizeStart($event, 'right')"></div>
         </div>
       </div>
     </div>
@@ -101,63 +85,136 @@
       <div class="cal-tab-body">
         <!-- ═══ MANAGE JOB ═══ -->
         <div v-if="activeTab === 'manage'" class="cal-tab-content">
-          <div v-if="!selectedJobData" class="cal-empty-tab">
-            Click a job on the calendar to view details.
-          </div>
+          <div v-if="!selectedJobData" class="cal-empty-tab">Click a job on the calendar to view details.</div>
           <template v-else>
-            <!-- Job Details -->
-            <div class="cal-detail-grid">
-              <div class="edit-field">
-                <span class="edit-label">Title</span>
-                <span class="edit-value">{{ selectedJobData.title }}</span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">Type</span>
-                <span class="edit-value type-tag" :class="'type-tag--' + selectedJobData.type">
-                  {{ selectedJobData.type === 'uv' ? 'UV' : 'Laser' }}
-                </span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">Quantity</span>
-                <span class="edit-value">{{ selectedJobData.quantity }}</span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">Start Date</span>
-                <span class="edit-value">{{ formatDateDisplay(selectedJobData.startDate) }}</span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">End Date</span>
-                <span class="edit-value">{{ formatDateDisplay(selectedJobData.endDate) }}</span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">Status</span>
-                <span class="edit-value">{{ selectedJobData.status || 'Active' }}</span>
-              </div>
-              <div class="edit-field">
-                <span class="edit-label">BD Number</span>
-                <span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span>
+            <!-- ── TIMELINE ── -->
+            <div class="tl-track">
+              <div v-for="(step, i) in STAGES" :key="step.key" class="tl-step" :class="{ 'tl-step--done': jobStageIndex >= i, 'tl-step--active': jobStageIndex === i }">
+                <div class="tl-dot"></div>
+                <div v-if="i < STAGES.length - 1" class="tl-line" :class="{ 'tl-line--done': jobStageIndex > i }"></div>
+                <span class="tl-label">{{ step.label }}</span>
               </div>
             </div>
 
-            <!-- Milestones (display only) -->
-            <div class="section-heading">Milestones</div>
-            <div class="cal-milestones">
-              <div class="cal-milestone-row">
-                <span class="edit-label milestone-label">Job Created</span>
-                <span class="edit-value">{{ formatDateDisplay(selectedJobData.created_at) || '–' }}</span>
+            <!-- ── STAGE ACTION PANEL ── -->
+            <div class="stage-panel">
+              <!-- Stage 1: Connected — BD input -->
+              <template v-if="jobStageIndex === 1">
+                <div class="stage-action">
+                  <span class="stage-prompt">Connect a BD Number to proceed</span>
+                  <div class="stage-row">
+                    <div class="bd-select-wrapper bd-select-wrapper--inline">
+                      <input class="edit-input" v-model="stageBdSearch" placeholder="Search BD#..." @focus="stageBdOpen = true" @blur="closeStageBdDropdown" />
+                      <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown">
+                        <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="submitStageBd(opt)">
+                          <span class="bd-opt-num">{{ opt.bd_number }}</span>
+                          <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
+                          <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Stage 2: Arrival — date input -->
+              <template v-if="jobStageIndex === 2">
+                <div class="stage-action">
+                  <span class="stage-prompt">Set arrival date</span>
+                  <div class="stage-row">
+                    <input type="date" class="edit-input" v-model="stageArrivalDate" />
+                    <button class="btn-action btn-action--primary" :disabled="!stageArrivalDate" @click="submitArrival">Submit</button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Stage 3: Started / Pending Start + Manual Complete -->
+              <template v-if="jobStageIndex === 3 || jobStageIndex === 4">
+                <div class="stage-action">
+                  <span v-if="!jobHasStarted" class="stage-prompt">Pending start — begins {{ fmtDate(selectedJobData.startDate) }}</span>
+                  <span v-else class="stage-prompt stage-prompt--active">In progress — ends {{ fmtDate(selectedJobData.endDate) }}</span>
+                  <div class="stage-row">
+                    <button class="btn-action btn-action--muted" @click="enterReschedule">Change Start Date</button>
+                    <div class="edit-field edit-field--compact">
+                      <span class="edit-label">Complete Date</span>
+                      <input type="date" class="edit-input" v-model="stageCompleteDate" />
+                    </div>
+                    <button class="btn-action btn-action--primary" :disabled="!stageCompleteDate" @click="submitComplete">Mark Completed</button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Reschedule inline mode -->
+              <template v-if="isRescheduling">
+                <div class="stage-action stage-action--warn">
+                  <span class="stage-prompt stage-prompt--warn">Drag or resize the preview bar on the calendar, then submit.</span>
+                  <div class="stage-row">
+                    <div class="edit-field edit-field--compact">
+                      <span class="edit-label">New Start</span>
+                      <input type="date" class="edit-input" v-model="rescheduleJob.startDate" />
+                    </div>
+                    <div class="edit-field edit-field--compact">
+                      <span class="edit-label">New End</span>
+                      <span class="cal-computed-value">{{ rescheduleEndDate }}</span>
+                    </div>
+                  </div>
+                  <div class="stage-warn-msg">Changing the start date will update the booking creation timestamp. You may lose your current booking priority.</div>
+                  <div class="stage-row">
+                    <button class="btn-action btn-action--muted" @click="cancelReschedule">Cancel</button>
+                    <button class="btn-action btn-action--submit" :disabled="!rescheduleJob.startDate" @click="submitReschedule">Confirm Change</button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Stage 5: Checkout -->
+              <template v-if="jobStageIndex === 5">
+                <div class="stage-action">
+                  <span class="stage-prompt">Ready for checkout</span>
+                  <div class="stage-row">
+                    <div class="edit-field edit-field--compact">
+                      <span class="edit-label">Checkout Date</span>
+                      <input type="date" class="edit-input" v-model="stageCheckoutDate" />
+                    </div>
+                    <button class="btn-action btn-action--primary" :disabled="!stageCheckoutDate" @click="submitCheckout">Submit Checkout</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- ── JOB DETAILS (view / edit) ── -->
+            <div class="section-heading detail-heading">
+              Job Details
+              <button v-if="!editMode" class="btn-action btn-action--muted btn-sm" @click="enterEditMode">Edit</button>
+              <template v-else>
+                <button class="btn-action btn-action--muted btn-sm" @click="cancelEditMode">Cancel</button>
+                <button class="btn-action btn-action--primary btn-sm" @click="saveEditMode">Save</button>
+              </template>
+            </div>
+
+            <!-- View mode -->
+            <div v-if="!editMode" class="cal-detail-grid">
+              <div class="edit-field"><span class="edit-label">Title</span><span class="edit-value">{{ selectedJobData.title }}</span></div>
+              <div class="edit-field"><span class="edit-label">Type</span><span class="edit-value type-tag" :class="'type-tag--' + selectedJobData.type">{{ selectedJobData.type === 'uv' ? 'UV' : 'Laser' }}</span></div>
+              <div class="edit-field"><span class="edit-label">Quantity</span><span class="edit-value">{{ selectedJobData.quantity }}</span></div>
+              <div class="edit-field"><span class="edit-label">Start Date</span><span class="edit-value">{{ fmtDate(selectedJobData.startDate) }}</span></div>
+              <div class="edit-field"><span class="edit-label">End Date</span><span class="edit-value">{{ fmtDate(selectedJobData.endDate) }}</span></div>
+              <div class="edit-field"><span class="edit-label">BD Number</span><span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span></div>
+              <div class="edit-field"><span class="edit-label">PIC</span><span class="edit-value">{{ getTeammateName(selectedJobData.pic_id) || '–' }}</span></div>
+              <div class="edit-field"><span class="edit-label">Created</span><span class="edit-value">{{ fmtDate(selectedJobData.created_at) || '–' }}</span></div>
+            </div>
+
+            <!-- Edit mode -->
+            <div v-else class="cal-detail-grid">
+              <div class="edit-field"><label class="edit-label">Title</label><input class="edit-input" v-model="editForm.title" /></div>
+              <div class="edit-field">
+                <label class="edit-label">Type</label>
+                <select class="edit-select" v-model="editForm.type"><option value="uv">UV</option><option value="laser">Laser</option></select>
               </div>
-              <div class="cal-milestone-row">
-                <span class="edit-label milestone-label">Arrival Date</span>
-                <span class="edit-value" :class="{ 'milestone-pending': !selectedJobData.arrival_date }">
-                  {{ selectedJobData.arrival_date ? formatDateDisplay(selectedJobData.arrival_date) : 'Pending' }}
-                </span>
-              </div>
-              <div class="cal-milestone-row">
-                <span class="edit-label milestone-label">Checkout Date</span>
-                <span class="edit-value" :class="{ 'milestone-pending': !selectedJobData.checkout_date }">
-                  {{ selectedJobData.checkout_date ? formatDateDisplay(selectedJobData.checkout_date) : 'Pending' }}
-                </span>
-              </div>
+              <div class="edit-field"><label class="edit-label">Quantity</label><input class="edit-input" type="number" v-model.number="editForm.quantity" min="1" /></div>
+              <div class="edit-field"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
+              <div class="edit-field"><label class="edit-label">End Date</label><input class="edit-input" type="date" v-model="editForm.endDate" /></div>
+              <div class="edit-field"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
+              <div class="edit-field"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
             </div>
 
             <!-- BD Batch Details -->
@@ -167,22 +224,11 @@
                 <div class="bd-batch-header">
                   <span class="bd-batch-opid">{{ selectedBdBatch.opid }}</span>
                   <span class="bd-batch-title">{{ selectedBdBatch.opTitle }}</span>
-                  <span class="bd-batch-cust type-tag" :class="'type-tag--' + (selectedBdBatch.custCategory || 'uv')">
-                    {{ selectedBdBatch.customization }}
-                  </span>
+                  <span class="bd-batch-cust type-tag" :class="'type-tag--' + (selectedBdBatch.custCategory || 'uv')">{{ selectedBdBatch.customization }}</span>
                 </div>
                 <div class="bd-batch-table-scroll">
                   <table class="bd-batch-table">
-                    <thead>
-                      <tr>
-                        <th>SKU</th>
-                        <th>Model</th>
-                        <th>Color</th>
-                        <th>Qty</th>
-                        <th>Status</th>
-                        <th>Mockup</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Mockup</th></tr></thead>
                     <tbody>
                       <tr v-for="item in selectedBdBatch.items" :key="item.lineId">
                         <td class="td-sku">{{ item.sku }}</td>
@@ -216,10 +262,7 @@
             </div>
             <div class="edit-field">
               <label class="edit-label">Type</label>
-              <select class="edit-select" v-model="draftJob.type">
-                <option value="uv">UV</option>
-                <option value="laser">Laser</option>
-              </select>
+              <select class="edit-select" v-model="draftJob.type"><option value="uv">UV</option><option value="laser">Laser</option></select>
             </div>
             <div class="edit-field">
               <label class="edit-label">Quantity</label>
@@ -230,32 +273,37 @@
               <input class="edit-input" type="date" v-model="draftJob.startDate" />
             </div>
             <div class="edit-field">
-              <label class="edit-label">Computed End Date</label>
+              <label class="edit-label">End Date</label>
               <span class="cal-computed-value">{{ draftEndDate || '–' }}</span>
             </div>
             <div class="edit-field">
-              <label class="edit-label">Days Required</label>
+              <label class="edit-label">Days</label>
               <span class="cal-computed-value">{{ draftDaysRequired }}</span>
             </div>
-            <!-- BD Number Dropdown -->
+            <!-- PIC dropdown -->
+            <div class="edit-field">
+              <label class="edit-label">PIC (Person)</label>
+              <div class="bd-select-wrapper">
+                <input class="edit-input" v-model="picSearch" placeholder="Search name..." @focus="picDropdownOpen = true" @blur="closePicDropdown" />
+                <div v-if="picDropdownOpen && filteredPicOptions.length" class="bd-dropdown">
+                  <div v-for="tm in filteredPicOptions" :key="tm.id" class="bd-dropdown-item" :class="{ 'bd-dropdown-item--selected': draftJob.pic_id === tm.id }" @mousedown.prevent="selectPic(tm)">
+                    <span class="bd-opt-num">{{ tm.name }}</span>
+                    <span class="bd-opt-meta">{{ tm.type || '' }}</span>
+                  </div>
+                </div>
+              </div>
+              <span v-if="draftJob.pic_id" class="bd-selected-tag">
+                {{ getTeammateName(draftJob.pic_id) }}
+                <button class="bd-clear-btn" @click="clearDraftPic">×</button>
+              </span>
+            </div>
+            <!-- BD Number dropdown -->
             <div class="edit-field edit-field--wide">
               <label class="edit-label">BD Number (optional)</label>
               <div class="bd-select-wrapper">
-                <input
-                  class="edit-input bd-search-input"
-                  v-model="bdSearch"
-                  placeholder="Search BD#..."
-                  @focus="bdDropdownOpen = true"
-                  @blur="closeBdDropdown"
-                />
+                <input class="edit-input bd-search-input" v-model="bdSearch" placeholder="Search BD#..." @focus="bdDropdownOpen = true" @blur="closeBdDropdown" />
                 <div v-if="bdDropdownOpen && filteredBdOptions.length" class="bd-dropdown">
-                  <div
-                    v-for="opt in filteredBdOptions"
-                    :key="opt.bd_number"
-                    class="bd-dropdown-item"
-                    :class="{ 'bd-dropdown-item--selected': draftJob.bd_number === opt.bd_number }"
-                    @mousedown.prevent="selectBdNumber(opt)"
-                  >
+                  <div v-for="opt in filteredBdOptions" :key="opt.bd_number" class="bd-dropdown-item" :class="{ 'bd-dropdown-item--selected': draftJob.bd_number === opt.bd_number }" @mousedown.prevent="selectBdNumber(opt)">
                     <span class="bd-opt-num">{{ opt.bd_number }}</span>
                     <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
                     <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
@@ -269,40 +317,24 @@
             </div>
           </div>
 
-          <!-- BD Preview when selected -->
+          <!-- BD Preview -->
           <template v-if="draftBdBatch">
             <div class="section-heading">BD Preview ({{ draftJob.bd_number }})</div>
             <div class="bd-batch-card">
               <div class="bd-batch-header">
                 <span class="bd-batch-opid">{{ draftBdBatch.opid }}</span>
                 <span class="bd-batch-title">{{ draftBdBatch.opTitle }}</span>
-                <span class="bd-batch-cust type-tag" :class="'type-tag--' + (draftBdBatch.custCategory || 'uv')">
-                  {{ draftBdBatch.customization }}
-                </span>
+                <span class="bd-batch-cust type-tag" :class="'type-tag--' + (draftBdBatch.custCategory || 'uv')">{{ draftBdBatch.customization }}</span>
               </div>
               <div class="bd-batch-table-scroll">
                 <table class="bd-batch-table">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Model</th>
-                      <th>Color</th>
-                      <th>Qty</th>
-                      <th>Status</th>
-                      <th>Mockup</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Mockup</th></tr></thead>
                   <tbody>
                     <tr v-for="item in draftBdBatch.items" :key="item.lineId">
-                      <td class="td-sku">{{ item.sku }}</td>
-                      <td>{{ item.model }}</td>
-                      <td>{{ item.color }}</td>
+                      <td class="td-sku">{{ item.sku }}</td><td>{{ item.model }}</td><td>{{ item.color }}</td>
                       <td class="td-qty">{{ item.qty }}</td>
                       <td><span class="status-pill" :class="'pill--' + statusKey(item.status)">{{ item.status }}</span></td>
-                      <td>
-                        <a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a>
-                        <span v-else class="td-empty">–</span>
-                      </td>
+                      <td><a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a><span v-else class="td-empty">–</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -310,14 +342,10 @@
             </div>
           </template>
 
-          <div class="cal-draft-hint" v-if="draftJob.startDate">
-            Drag the preview bar on the calendar to change start date. Resize edges to spread over more days.
-          </div>
+          <div class="cal-draft-hint" v-if="draftJob.startDate">Drag the preview bar to change start date. Resize edges to spread over more days.</div>
           <div class="cal-form-actions">
             <button class="btn-action btn-action--muted" @click="cancelDraft">Cancel</button>
-            <button class="btn-action btn-action--submit" :disabled="!canSubmitDraft" @click="submitDraft">
-              Create Job
-            </button>
+            <button class="btn-action btn-action--submit" :disabled="!canSubmitDraft" @click="submitDraft">Create Job</button>
           </div>
         </div>
 
@@ -325,64 +353,36 @@
         <div v-if="activeTab === 'capacity'" class="cal-tab-content">
           <div class="section-heading">Add Capacity Rule</div>
           <div class="cal-form-grid">
-            <div class="edit-field">
-              <label class="edit-label">Title</label>
-              <input class="edit-input" v-model="capForm.title" placeholder="e.g. Ramadan Break" />
-            </div>
+            <div class="edit-field"><label class="edit-label">Title</label><input class="edit-input" v-model="capForm.title" placeholder="e.g. Ramadan Break" /></div>
             <div class="edit-field">
               <label class="edit-label">Rule Type</label>
-              <select class="edit-select" v-model="capForm.ruleType">
-                <option value="default">Default (Monthly)</option>
-                <option value="general">General (Date Range)</option>
-              </select>
+              <select class="edit-select" v-model="capForm.ruleType"><option value="default">Default (Monthly)</option><option value="general">General (Date Range)</option></select>
             </div>
             <div class="edit-field">
               <label class="edit-label">Customization Type</label>
-              <select class="edit-select" v-model="capForm.custType">
-                <option value="uv">UV</option>
-                <option value="laser">Laser</option>
-              </select>
+              <select class="edit-select" v-model="capForm.custType"><option value="uv">UV</option><option value="laser">Laser</option></select>
             </div>
-            <div class="edit-field">
-              <label class="edit-label">Capacity / Day</label>
-              <input class="edit-input" type="number" v-model.number="capForm.quantity" min="0" />
-            </div>
+            <div class="edit-field"><label class="edit-label">Capacity / Day</label><input class="edit-input" type="number" v-model.number="capForm.quantity" min="0" /></div>
             <template v-if="capForm.ruleType === 'default'">
-              <div class="edit-field">
-                <label class="edit-label">Month</label>
-                <input class="edit-input" type="month" v-model="capForm.month" />
-              </div>
+              <div class="edit-field"><label class="edit-label">Month</label><input class="edit-input" type="month" v-model="capForm.month" /></div>
             </template>
             <template v-else>
-              <div class="edit-field">
-                <label class="edit-label">Start Date</label>
-                <input class="edit-input" type="date" v-model="capForm.startDate" />
-              </div>
-              <div class="edit-field">
-                <label class="edit-label">End Date</label>
-                <input class="edit-input" type="date" v-model="capForm.endDate" />
-              </div>
+              <div class="edit-field"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="capForm.startDate" /></div>
+              <div class="edit-field"><label class="edit-label">End Date</label><input class="edit-input" type="date" v-model="capForm.endDate" /></div>
             </template>
           </div>
           <div class="cal-form-actions">
-            <button class="btn-action btn-action--primary" :disabled="!canSubmitCapacity" @click="submitCapacity">
-              Add Rule
-            </button>
+            <button class="btn-action btn-action--primary" :disabled="!canSubmitCapacity" @click="submitCapacity">Add Rule</button>
           </div>
-
           <div class="section-heading cap-list-heading">Existing Rules</div>
           <div v-if="!resolvedCapacity.length" class="cal-empty-tab">No capacity rules configured.</div>
           <div v-else class="cal-cap-list">
             <div v-for="rule in resolvedCapacity" :key="rule.id" class="cal-cap-item">
               <span class="cal-cap-title">{{ rule.title || '(untitled)' }}</span>
-              <span class="cal-cap-type-tag" :class="'type-tag--' + (rule.custType || 'uv')">
-                {{ (rule.custType || 'uv') === 'uv' ? 'UV' : 'Laser' }}
-              </span>
-              <span class="cal-cap-meta">
-                {{ rule.ruleType === 'default' ? rule.month : formatDateDisplay(rule.startDate) + ' → ' + formatDateDisplay(rule.endDate) }}
-              </span>
+              <span class="cal-cap-type-tag" :class="'type-tag--' + (rule.custType || 'uv')">{{ (rule.custType || 'uv') === 'uv' ? 'UV' : 'Laser' }}</span>
+              <span class="cal-cap-meta">{{ rule.ruleType === 'default' ? rule.month : fmtDate(rule.startDate) + ' → ' + fmtDate(rule.endDate) }}</span>
               <span class="cal-cap-qty">{{ rule.quantity }}/day</span>
-              <button class="btn-icon btn-icon--danger" @click="emitCapacityDelete(rule.id)" title="Delete rule">×</button>
+              <button class="btn-icon btn-icon--danger" @click="emitCapacityDelete(rule.id)" title="Delete">×</button>
             </div>
           </div>
         </div>
@@ -402,44 +402,37 @@ const TABS = [
   { key: 'new', label: 'New Job' },
   { key: 'capacity', label: 'Manage Capacity' },
 ];
+const STAGES = [
+  { key: 'created', label: 'Created' },
+  { key: 'connected', label: 'Connected' },
+  { key: 'arrived', label: 'Arrived' },
+  { key: 'started', label: 'Started' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'checkout', label: 'Checked Out' },
+];
 
-// ─── Date Utilities ───
 function parseDate(str) {
   if (!str) return null;
-  const [y, m, d] = str.split('-').map(Number);
+  const s = str.length > 10 ? str.substring(0, 10) : str;
+  const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function isWeekend(d) {
-  const dow = d.getDay();
-  return dow === 0 || dow === 6;
-}
-function nextDay(d) {
-  const n = new Date(d);
-  n.setDate(n.getDate() + 1);
-  return n;
-}
+function isWeekend(d) { const dow = d.getDay(); return dow === 0 || dow === 6; }
+function nextDay(d) { const n = new Date(d); n.setDate(n.getDate() + 1); return n; }
 function countWorkdays(from, to) {
-  let count = 0;
-  let c = new Date(from);
-  while (c <= to) {
-    if (!isWeekend(c)) count++;
-    c = nextDay(c);
-  }
+  let count = 0, c = new Date(from);
+  while (c <= to) { if (!isWeekend(c)) count++; c = nextDay(c); }
   return count;
 }
-function formatDateNice(str) {
+function fmtDate(str) {
   if (!str) return '';
-  // Handle ISO datetime strings (trim time)
-  const dateOnly = str.length > 10 ? str.substring(0, 10) : str;
-  const d = parseDate(dateOnly);
-  if (!d) return '';
-  return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+  const d = parseDate(str);
+  return d ? `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}` : '';
 }
 
-// Default job colors (cycle through if no color set)
 const JOB_COLORS_UV = ['#3b82f6', '#2563eb', '#1d4ed8', '#60a5fa', '#93c5fd'];
 const JOB_COLORS_LASER = ['#7c3aed', '#6d28d9', '#5b21b6', '#8b5cf6', '#a78bfa'];
 
@@ -454,107 +447,60 @@ export default {
   emits: ['trigger-event'],
   setup(props, { emit }) {
     // ─── DATA RESOLUTION ───
-    const resolvedJobs = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.jobsData);
+    function resolve(key) {
+      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.[key]);
       return Array.isArray(raw) ? raw : [];
-    });
-    const resolvedCapacity = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.capacityData);
-      return Array.isArray(raw) ? raw : [];
-    });
+    }
+    const resolvedJobs = computed(() => resolve('jobsData'));
+    const resolvedCapacity = computed(() => resolve('capacityData'));
     const defaultUvCap = computed(() => props.content?.defaultUvCapacity ?? 100);
     const defaultLaserCap = computed(() => props.content?.defaultLaserCapacity ?? 50);
-
-    // Order plan & booking data resolution
-    const resolvedOpHeaders = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.orderplanHeadersData);
-      return Array.isArray(raw) ? raw : [];
-    });
-    const resolvedOpLines = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.orderplanLinesData);
-      return Array.isArray(raw) ? raw : [];
-    });
-    const resolvedBookingItems = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.bookingItems);
-      return Array.isArray(raw) ? raw : [];
-    });
-    const resolvedInventoryData = computed(() => {
-      const raw = wwLib.wwUtils.getDataFromCollection(props.content?.inventoryData);
-      return Array.isArray(raw) ? raw : [];
-    });
+    const resolvedOpHeaders = computed(() => resolve('orderplanHeadersData'));
+    const resolvedOpLines = computed(() => resolve('orderplanLinesData'));
+    const resolvedBookingItems = computed(() => resolve('bookingItems'));
+    const resolvedInventoryData = computed(() => resolve('inventoryData'));
+    const resolvedTeammates = computed(() => resolve('teammatesList'));
 
     // ─── LOOKUP MAPS ───
-    const opHeaderLookup = computed(() => {
-      const map = {};
-      for (const h of resolvedOpHeaders.value) map[h.id] = h;
-      return map;
-    });
-    const bookingItemLookup = computed(() => {
-      const map = {};
-      for (const bi of resolvedBookingItems.value) map[bi.id] = bi;
-      return map;
-    });
-    const inventoryLookup = computed(() => {
-      const map = {};
-      for (const inv of resolvedInventoryData.value) map[inv.sku] = inv;
-      return map;
-    });
+    const opHeaderLookup = computed(() => { const m = {}; for (const h of resolvedOpHeaders.value) m[h.id] = h; return m; });
+    const bookingItemLookup = computed(() => { const m = {}; for (const bi of resolvedBookingItems.value) m[bi.id] = bi; return m; });
+    const inventoryLookup = computed(() => { const m = {}; for (const inv of resolvedInventoryData.value) m[inv.sku] = inv; return m; });
+    const teammateLookup = computed(() => { const m = {}; for (const t of resolvedTeammates.value) m[t.id] = t; return m; });
 
-    // ─── BD NUMBER BATCHES ───
-    // Group orderplan lines by bd_number → { bd_number, customization, headerid, opid, opTitle, items[] }
+    function getTeammateName(id) { return teammateLookup.value[id]?.name || ''; }
+
+    // ─── BD BATCHES ───
     const bdBatches = computed(() => {
-      const batchMap = {};
+      const bm = {};
       for (const line of resolvedOpLines.value) {
         const bd = line.bd_number;
         if (!bd) continue;
-        if (!batchMap[bd]) {
-          const header = opHeaderLookup.value[line.headerid];
-          // Determine if UV or Laser category
-          const cust = line.customization || 'None';
-          const custLower = cust.toLowerCase();
-          const custCategory = custLower.includes('laser') || custLower.includes('deboss') ? 'laser' : 'uv';
-          batchMap[bd] = {
-            bd_number: bd,
-            customization: cust,
-            custCategory,
-            headerid: line.headerid,
-            opid: header?.opid || '–',
-            opTitle: header?.title || '–',
-            line_ids: [],
-            items: [],
+        if (!bm[bd]) {
+          const h = opHeaderLookup.value[line.headerid];
+          const c = (line.customization || 'None').toLowerCase();
+          bm[bd] = {
+            bd_number: bd, customization: line.customization || 'None',
+            custCategory: c.includes('laser') || c.includes('deboss') ? 'laser' : 'uv',
+            headerid: line.headerid, opid: h?.opid || '–', opTitle: h?.title || '–',
+            line_ids: [], items: [],
           };
         }
-        const batch = batchMap[bd];
-        batch.line_ids.push(line.id);
-
+        bm[bd].line_ids.push(line.id);
         const bi = bookingItemLookup.value[line.bookingitems_headerid];
         const inv = bi ? inventoryLookup.value[bi.sku] : null;
-        batch.items.push({
-          lineId: line.id,
-          sku: bi?.sku || '–',
-          model: inv?.model || '–',
-          color: inv?.color || '–',
-          qty: line.quantity_assigned || 0,
-          status: bi?.status || 'Booked',
-          mockupLink: line.mockup_link || '',
+        bm[bd].items.push({
+          lineId: line.id, sku: bi?.sku || '–', model: inv?.model || '–', color: inv?.color || '–',
+          qty: line.quantity_assigned || 0, status: bi?.status || 'Booked', mockupLink: line.mockup_link || '',
         });
       }
-      return batchMap;
+      return bm;
     });
 
-    // Unique BD number options for dropdown
-    const bdOptions = computed(() => {
-      return Object.values(bdBatches.value).map(b => ({
-        bd_number: b.bd_number,
-        customization: b.customization,
-        custCategory: b.custCategory,
-        opid: b.opid,
-        opTitle: b.opTitle,
-        itemCount: b.items.length,
-        batch_key: `${b.headerid}::${b.customization}`,
-        line_ids: b.line_ids,
-      }));
-    });
+    const bdOptions = computed(() => Object.values(bdBatches.value).map(b => ({
+      bd_number: b.bd_number, customization: b.customization, custCategory: b.custCategory,
+      opid: b.opid, opTitle: b.opTitle, itemCount: b.items.length,
+      batch_key: `${b.headerid}::${b.customization}`, line_ids: b.line_ids,
+    })));
 
     // ─── NAV STATE ───
     const now = new Date();
@@ -564,386 +510,310 @@ export default {
     const activeTab = ref('manage');
     const selectedJobId = ref(null);
     const gridRef = ref(null);
-
     const monthLabel = computed(() => MONTH_NAMES[currentMonth.value]);
 
     // ─── CALENDAR DAYS ───
     const calendarDays = computed(() => {
       const first = new Date(currentYear.value, currentMonth.value, 1);
-      let startDow = first.getDay();
-      startDow = (startDow + 6) % 7;
-      const startDate = new Date(first);
-      startDate.setDate(startDate.getDate() - startDow);
-
+      let sd = (first.getDay() + 6) % 7;
+      const start = new Date(first); start.setDate(start.getDate() - sd);
       const days = [];
       for (let i = 0; i < 42; i++) {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + i);
-        const ds = toDateStr(d);
-        const dow = d.getDay();
+        const d = new Date(start); d.setDate(start.getDate() + i);
+        const ds = toDateStr(d), dow = d.getDay();
         days.push({
-          date: new Date(d),
-          dateStr: ds,
-          dayNum: d.getDate(),
-          monthShort: MONTH_SHORT[d.getMonth()],
-          isWeekend: dow === 0 || dow === 6,
-          isToday: ds === todayStr,
-          outside: d.getMonth() !== currentMonth.value,
-          weekIndex: Math.floor(i / 7),
-          dayIndex: i % 7,
-          idx: i,
+          date: new Date(d), dateStr: ds, dayNum: d.getDate(), monthShort: MONTH_SHORT[d.getMonth()],
+          isWeekend: dow === 0 || dow === 6, isToday: ds === todayStr,
+          outside: d.getMonth() !== currentMonth.value, weekIndex: Math.floor(i / 7), dayIndex: i % 7, idx: i,
         });
       }
       return days;
     });
 
-    // ─── CAPACITY SYSTEM ───
+    // ─── CAPACITY ───
     function getCapacityForDate(dateStr, type) {
       let cap = type === 'uv' ? defaultUvCap.value : defaultLaserCap.value;
-      const monthStr = dateStr.substring(0, 7);
-
-      for (const rule of resolvedCapacity.value) {
-        if (rule.ruleType === 'default' && rule.month === monthStr && (rule.custType || 'uv') === type) {
-          cap = Number(rule.quantity) || 0;
-        }
-      }
-      for (const rule of resolvedCapacity.value) {
-        if (rule.ruleType === 'general' && dateStr >= rule.startDate && dateStr <= rule.endDate && (rule.custType || 'uv') === type) {
-          cap = Number(rule.quantity) || 0;
-        }
-      }
+      const ms = dateStr.substring(0, 7);
+      for (const r of resolvedCapacity.value) { if (r.ruleType === 'default' && r.month === ms && (r.custType || 'uv') === type) cap = Number(r.quantity) || 0; }
+      for (const r of resolvedCapacity.value) { if (r.ruleType === 'general' && dateStr >= r.startDate && dateStr <= r.endDate && (r.custType || 'uv') === type) cap = Number(r.quantity) || 0; }
       return cap;
     }
-
-    function getCapacityOverrides(dateStr) {
-      return resolvedCapacity.value.filter(
-        r => r.ruleType === 'general' && dateStr >= r.startDate && dateStr <= r.endDate
-      );
-    }
-
-    function uvUsed(day) {
-      return (allAllocations.value[day.dateStr] || [])
-        .filter(a => a.type === 'uv')
-        .reduce((s, a) => s + a.qty, 0);
-    }
+    function getCapacityOverrides(dateStr) { return resolvedCapacity.value.filter(r => r.ruleType === 'general' && dateStr >= r.startDate && dateStr <= r.endDate); }
+    function uvUsed(day) { return (allAllocations.value[day.dateStr] || []).filter(a => a.type === 'uv').reduce((s, a) => s + a.qty, 0); }
     function uvTotal(day) { return getCapacityForDate(day.dateStr, 'uv'); }
-    function laserUsed(day) {
-      return (allAllocations.value[day.dateStr] || [])
-        .filter(a => a.type === 'laser')
-        .reduce((s, a) => s + a.qty, 0);
-    }
+    function laserUsed(day) { return (allAllocations.value[day.dateStr] || []).filter(a => a.type === 'laser').reduce((s, a) => s + a.qty, 0); }
     function laserTotal(day) { return getCapacityForDate(day.dateStr, 'laser'); }
 
-    // ─── JOB ALLOCATION ENGINE ───
-    function allocateJobs(jobs, extraJob) {
-      const allocMap = {};
-      const jobEndDates = {};
-
+    // ─── ALLOCATION ENGINE ───
+    function allocateJobs(jobs, extra) {
+      const am = {}, ed = {};
       const sorted = [...jobs].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-      if (extraJob) sorted.push(extraJob);
-
+      if (extra) sorted.push(extra);
       for (const job of sorted) {
         if (!job.startDate || !job.quantity || job.quantity <= 0) continue;
-        let remaining = Number(job.quantity);
-        let current = parseDate(job.startDate);
-        if (!current) continue;
-
-        const maxDays = job._maxDays || 0;
-        let dayCount = 0;
-        let safety = 0;
-
-        while (remaining > 0 && safety < 3650) {
-          safety++;
-          if (isWeekend(current)) { current = nextDay(current); continue; }
-
-          const ds = toDateStr(current);
-          const totalCap = getCapacityForDate(ds, job.type || 'uv');
-          const used = (allocMap[ds] || [])
-            .filter(a => a.type === (job.type || 'uv'))
-            .reduce((s, a) => s + a.qty, 0);
-          const available = Math.max(0, totalCap - used);
-
-          if (available > 0) {
-            dayCount++;
-            let todayAlloc;
-            if (maxDays > 0 && dayCount <= maxDays) {
-              const remainingDays = maxDays - dayCount + 1;
-              todayAlloc = Math.min(available, Math.ceil(remaining / remainingDays));
-            } else {
-              todayAlloc = Math.min(remaining, available);
-            }
-            if (!allocMap[ds]) allocMap[ds] = [];
-            allocMap[ds].push({ jobId: job.id || '__draft__', type: job.type || 'uv', qty: todayAlloc, title: job.title || '' });
-            remaining -= todayAlloc;
+        let rem = Number(job.quantity), cur = parseDate(job.startDate);
+        if (!cur) continue;
+        const mx = job._maxDays || 0; let dc = 0, sf = 0;
+        while (rem > 0 && sf < 3650) {
+          sf++;
+          if (isWeekend(cur)) { cur = nextDay(cur); continue; }
+          const ds = toDateStr(cur), tc = getCapacityForDate(ds, job.type || 'uv');
+          const used = (am[ds] || []).filter(a => a.type === (job.type || 'uv')).reduce((s, a) => s + a.qty, 0);
+          const avail = Math.max(0, tc - used);
+          if (avail > 0) {
+            dc++;
+            let ta;
+            if (mx > 0 && dc <= mx) { const rd = mx - dc + 1; ta = Math.min(avail, Math.ceil(rem / rd)); }
+            else ta = Math.min(rem, avail);
+            if (!am[ds]) am[ds] = [];
+            am[ds].push({ jobId: job.id || '__draft__', type: job.type || 'uv', qty: ta, title: job.title || '' });
+            rem -= ta;
           }
-
-          current = nextDay(current);
+          cur = nextDay(cur);
         }
-
-        let endDate = job.startDate;
-        for (const ds in allocMap) {
-          if ((allocMap[ds] || []).some(a => a.jobId === (job.id || '__draft__'))) {
-            if (ds > endDate) endDate = ds;
-          }
-        }
-        jobEndDates[job.id || '__draft__'] = endDate;
+        let endD = job.startDate;
+        for (const ds in am) { if ((am[ds] || []).some(a => a.jobId === (job.id || '__draft__')) && ds > endD) endD = ds; }
+        ed[job.id || '__draft__'] = endD;
       }
-
-      return { allocMap, jobEndDates };
+      return { allocMap: am, jobEndDates: ed };
     }
 
     const baseResult = computed(() => allocateJobs(resolvedJobs.value, null));
 
-    // ─── DRAFT JOB STATE ───
-    const draftJob = reactive({
-      title: '',
-      type: 'uv',
-      quantity: 100,
-      startDate: '',
-      _maxDays: 0,
-      bd_number: '',
-    });
+    // ─── DRAFT JOB ───
+    const draftJob = reactive({ title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0, bd_number: '', pic_id: '' });
     const isDrafting = computed(() => activeTab.value === 'new');
 
-    // BD search/dropdown state
-    const bdSearch = ref('');
-    const bdDropdownOpen = ref(false);
+    // ─── RESCHEDULE STATE ───
+    const isRescheduling = ref(false);
+    const rescheduleJob = reactive({ startDate: '', _maxDays: 0, quantity: 0, type: 'uv', id: '__draft__', title: '' });
 
-    const filteredBdOptions = computed(() => {
-      const q = bdSearch.value.toLowerCase().trim();
-      if (!q) return bdOptions.value;
-      return bdOptions.value.filter(o =>
-        o.bd_number.toLowerCase().includes(q) ||
-        o.opid.toLowerCase().includes(q) ||
-        o.opTitle.toLowerCase().includes(q)
-      );
-    });
-
-    function selectBdNumber(opt) {
-      draftJob.bd_number = opt.bd_number;
-      bdSearch.value = opt.bd_number;
-      bdDropdownOpen.value = false;
-    }
-    function clearDraftBd() {
-      draftJob.bd_number = '';
-      bdSearch.value = '';
-    }
-    function closeBdDropdown() {
-      setTimeout(() => { bdDropdownOpen.value = false; }, 150);
-    }
-
-    // Draft BD batch preview
-    const draftBdBatch = computed(() => {
-      if (!draftJob.bd_number) return null;
-      return bdBatches.value[draftJob.bd_number] || null;
-    });
-
-    // Full allocations (existing + draft if applicable)
-    const fullResult = computed(() => {
-      if (!isDrafting.value || !draftJob.startDate || !draftJob.quantity) {
-        return baseResult.value;
+    // The "extra" job for calendar preview (draft or reschedule ghost)
+    const previewExtra = computed(() => {
+      if (isDrafting.value && draftJob.startDate && draftJob.quantity > 0) {
+        return { id: '__draft__', title: draftJob.title || 'New Job', type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, _maxDays: draftJob._maxDays };
       }
-      return allocateJobs(resolvedJobs.value, {
-        id: '__draft__',
-        title: draftJob.title || 'New Job',
-        type: draftJob.type,
-        quantity: draftJob.quantity,
-        startDate: draftJob.startDate,
-        _maxDays: draftJob._maxDays,
-      });
+      if (isRescheduling.value && rescheduleJob.startDate && rescheduleJob.quantity > 0) {
+        return { id: '__draft__', title: rescheduleJob.title || 'Reschedule', type: rescheduleJob.type, quantity: rescheduleJob.quantity, startDate: rescheduleJob.startDate, _maxDays: rescheduleJob._maxDays };
+      }
+      return null;
+    });
+
+    // For reschedule, exclude the original job from the base list
+    const jobsForAllocation = computed(() => {
+      if (isRescheduling.value && selectedJobId.value) {
+        return resolvedJobs.value.filter(j => j.id !== selectedJobId.value);
+      }
+      return resolvedJobs.value;
+    });
+
+    const fullResult = computed(() => {
+      if (!previewExtra.value) return allocateJobs(jobsForAllocation.value, null);
+      return allocateJobs(jobsForAllocation.value, previewExtra.value);
     });
 
     const allAllocations = computed(() => fullResult.value.allocMap);
-    const draftEndDate = computed(() => {
-      const ed = fullResult.value.jobEndDates['__draft__'];
-      return ed ? formatDateNice(ed) : '';
-    });
+    const draftEndDate = computed(() => { const e = fullResult.value.jobEndDates['__draft__']; return e ? fmtDate(e) : ''; });
     const draftEndDateRaw = computed(() => fullResult.value.jobEndDates['__draft__'] || '');
+    const rescheduleEndDate = computed(() => draftEndDate.value);
     const draftDaysRequired = computed(() => {
       if (!draftEndDateRaw.value || !draftJob.startDate) return '–';
-      const s = parseDate(draftJob.startDate);
-      const e = parseDate(draftEndDateRaw.value);
-      if (!s || !e) return '–';
-      return countWorkdays(s, e);
+      const s = parseDate(draftJob.startDate), e = parseDate(draftEndDateRaw.value);
+      return (s && e) ? countWorkdays(s, e) : '–';
     });
-    const canSubmitDraft = computed(() =>
-      draftJob.title && draftJob.type && draftJob.quantity > 0 && draftJob.startDate
-    );
+    const canSubmitDraft = computed(() => draftJob.title && draftJob.type && draftJob.quantity > 0 && draftJob.startDate);
 
-    // ─── JOB SEGMENT RENDERING ───
+    // ─── BD SEARCH (new job) ───
+    const bdSearch = ref('');
+    const bdDropdownOpen = ref(false);
+    const filteredBdOptions = computed(() => {
+      const q = bdSearch.value.toLowerCase().trim();
+      return q ? bdOptions.value.filter(o => o.bd_number.toLowerCase().includes(q) || o.opid.toLowerCase().includes(q) || o.opTitle.toLowerCase().includes(q)) : bdOptions.value;
+    });
+    function selectBdNumber(opt) { draftJob.bd_number = opt.bd_number; bdSearch.value = opt.bd_number; bdDropdownOpen.value = false; }
+    function clearDraftBd() { draftJob.bd_number = ''; bdSearch.value = ''; }
+    function closeBdDropdown() { setTimeout(() => { bdDropdownOpen.value = false; }, 150); }
+
+    // ─── PIC SEARCH (new job) ───
+    const picSearch = ref('');
+    const picDropdownOpen = ref(false);
+    const filteredPicOptions = computed(() => {
+      const q = picSearch.value.toLowerCase().trim();
+      return q ? resolvedTeammates.value.filter(t => t.name?.toLowerCase().includes(q)) : resolvedTeammates.value;
+    });
+    function selectPic(tm) { draftJob.pic_id = tm.id; picSearch.value = tm.name; picDropdownOpen.value = false; }
+    function clearDraftPic() { draftJob.pic_id = ''; picSearch.value = ''; }
+    function closePicDropdown() { setTimeout(() => { picDropdownOpen.value = false; }, 150); }
+
+    const draftBdBatch = computed(() => draftJob.bd_number ? bdBatches.value[draftJob.bd_number] || null : null);
+
+    // ─── STAGE BD SEARCH (manage tab, stage 1) ───
+    const stageBdSearch = ref('');
+    const stageBdOpen = ref(false);
+    const filteredStageBdOptions = computed(() => {
+      const q = stageBdSearch.value.toLowerCase().trim();
+      return q ? bdOptions.value.filter(o => o.bd_number.toLowerCase().includes(q) || o.opid.toLowerCase().includes(q)) : bdOptions.value;
+    });
+    function closeStageBdDropdown() { setTimeout(() => { stageBdOpen.value = false; }, 150); }
+    function submitStageBd(opt) {
+      stageBdOpen.value = false;
+      stageBdSearch.value = '';
+      emit('trigger-event', {
+        name: 'onJobConnectBd',
+        event: { value: { jobId: selectedJobId.value, bd_number: opt.bd_number, batch_key: opt.batch_key, line_ids: opt.line_ids } },
+      });
+    }
+
+    // ─── STAGE ACTIONS ───
+    const stageArrivalDate = ref('');
+    const stageCompleteDate = ref('');
+    const stageCheckoutDate = ref('');
+
+    function submitArrival() {
+      if (!stageArrivalDate.value) return;
+      emit('trigger-event', { name: 'onJobArrival', event: { value: { jobId: selectedJobId.value, arrival_date: stageArrivalDate.value } } });
+      stageArrivalDate.value = '';
+    }
+    function submitComplete() {
+      if (!stageCompleteDate.value) return;
+      emit('trigger-event', { name: 'onJobComplete', event: { value: { jobId: selectedJobId.value, completed_at: stageCompleteDate.value } } });
+      stageCompleteDate.value = '';
+    }
+    function submitCheckout() {
+      if (!stageCheckoutDate.value) return;
+      emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
+      stageCheckoutDate.value = '';
+    }
+
+    // ─── RESCHEDULE ───
+    function enterReschedule() {
+      if (!selectedJobData.value) return;
+      const j = selectedJobData.value;
+      Object.assign(rescheduleJob, { startDate: j.startDate, _maxDays: 0, quantity: Number(j.quantity), type: j.type, id: '__draft__', title: j.title });
+      isRescheduling.value = true;
+    }
+    function cancelReschedule() { isRescheduling.value = false; }
+    function submitReschedule() {
+      if (!rescheduleJob.startDate) return;
+      const endDate = draftEndDateRaw.value;
+      const dailyAllocation = [];
+      const am = allAllocations.value;
+      for (const ds in am) {
+        const a = (am[ds] || []).find(x => x.jobId === '__draft__');
+        if (a) dailyAllocation.push({ date: ds, quantity: a.qty });
+      }
+      dailyAllocation.sort((a, b) => a.date.localeCompare(b.date));
+      emit('trigger-event', {
+        name: 'onJobUpdate',
+        event: { value: { jobId: selectedJobId.value, changes: { startDate: rescheduleJob.startDate, endDate, dailyAllocation } } },
+      });
+      isRescheduling.value = false;
+    }
+
+    // ─── SEGMENT RENDERING ───
     const allSegments = computed(() => {
-      const allocMap = allAllocations.value;
-      const days = calendarDays.value;
-
+      const am = allAllocations.value, days = calendarDays.value;
       const jobSet = new Map();
       for (const day of days) {
-        const allocs = allocMap[day.dateStr] || [];
-        for (const a of allocs) {
+        for (const a of (am[day.dateStr] || [])) {
           if (!jobSet.has(a.jobId)) {
             const job = resolvedJobs.value.find(j => j.id === a.jobId);
             jobSet.set(a.jobId, {
-              id: a.jobId,
-              title: a.title || job?.title || '',
-              type: a.type,
-              color: job?.color || '',
-              totalQty: job?.quantity || draftJob.quantity || 0,
+              id: a.jobId, title: a.title || job?.title || '', type: a.type,
+              color: job?.color || '', totalQty: job?.quantity || draftJob.quantity || rescheduleJob.quantity || 0,
               isDraft: a.jobId === '__draft__',
             });
           }
         }
       }
-
-      const segments = [];
-      let segIdx = 0;
-      const weekRows = {};
-
-      const jobIds = [...jobSet.keys()].sort((a, b) => {
-        if (a === '__draft__') return 1;
-        if (b === '__draft__') return -1;
-        return 0;
-      });
-
-      for (const jobId of jobIds) {
-        const jobInfo = jobSet.get(jobId);
-        const positions = [];
+      const segs = []; let si = 0;
+      const wk = {};
+      const ids = [...jobSet.keys()].sort((a, b) => a === '__draft__' ? 1 : b === '__draft__' ? -1 : 0);
+      for (const jid of ids) {
+        const ji = jobSet.get(jid);
+        const pos = [];
         for (const day of days) {
-          const allocs = allocMap[day.dateStr] || [];
-          const jobAlloc = allocs.find(a => a.jobId === jobId);
-          if (jobAlloc && !day.isWeekend) {
-            positions.push({
-              dateStr: day.dateStr,
-              weekIndex: day.weekIndex,
-              dayIndex: day.dayIndex,
-              qty: jobAlloc.qty,
-            });
-          }
+          const ja = (am[day.dateStr] || []).find(a => a.jobId === jid);
+          if (ja && !day.isWeekend) pos.push({ weekIndex: day.weekIndex, dayIndex: day.dayIndex, qty: ja.qty });
         }
-
-        if (!positions.length) continue;
-
-        const runs = [];
-        let currentRun = null;
-        for (const pos of positions) {
-          if (!currentRun || pos.weekIndex !== currentRun.weekIndex || pos.dayIndex !== currentRun.endCol + 1) {
-            if (currentRun) runs.push(currentRun);
-            currentRun = {
-              weekIndex: pos.weekIndex,
-              startCol: pos.dayIndex,
-              endCol: pos.dayIndex,
-              dailyQtys: [pos.qty],
-            };
-          } else {
-            currentRun.endCol = pos.dayIndex;
-            currentRun.dailyQtys.push(pos.qty);
-          }
+        if (!pos.length) continue;
+        const runs = []; let cr = null;
+        for (const p of pos) {
+          if (!cr || p.weekIndex !== cr.weekIndex || p.dayIndex !== cr.endCol + 1) { if (cr) runs.push(cr); cr = { weekIndex: p.weekIndex, startCol: p.dayIndex, endCol: p.dayIndex }; }
+          else cr.endCol = p.dayIndex;
         }
-        if (currentRun) runs.push(currentRun);
-
+        if (cr) runs.push(cr);
         for (const run of runs) {
-          if (!weekRows[run.weekIndex]) weekRows[run.weekIndex] = [];
-          let rowIdx = 0;
-          while (true) {
-            const conflict = weekRows[run.weekIndex].some(
-              r => r.rowIdx === rowIdx && !(run.endCol < r.startCol || run.startCol > r.endCol)
-            );
-            if (!conflict) break;
-            rowIdx++;
-          }
-          weekRows[run.weekIndex].push({ startCol: run.startCol, endCol: run.endCol, rowIdx });
-
-          const isFirstRun = run === runs[0];
-          const isLastRun = run === runs[runs.length - 1];
-          const color = jobInfo.color || (jobInfo.type === 'laser'
-            ? JOB_COLORS_LASER[segIdx % JOB_COLORS_LASER.length]
-            : JOB_COLORS_UV[segIdx % JOB_COLORS_UV.length]);
-
-          segments.push({
-            key: `${jobId}-${run.weekIndex}-${run.startCol}`,
-            jobId,
-            title: jobInfo.title,
-            type: jobInfo.type,
-            totalQty: jobInfo.totalQty,
-            color,
-            isDraft: jobInfo.isDraft,
-            isFirst: isFirstRun,
-            isLast: isLastRun,
-            weekIndex: run.weekIndex,
-            startCol: run.startCol,
-            endCol: run.endCol,
-            rowIndex: rowIdx,
-            dailyQtys: run.dailyQtys,
+          if (!wk[run.weekIndex]) wk[run.weekIndex] = [];
+          let ri = 0;
+          while (wk[run.weekIndex].some(r => r.ri === ri && !(run.endCol < r.sc || run.startCol > r.ec))) ri++;
+          wk[run.weekIndex].push({ sc: run.startCol, ec: run.endCol, ri });
+          const col = ji.color || (ji.type === 'laser' ? JOB_COLORS_LASER[si % JOB_COLORS_LASER.length] : JOB_COLORS_UV[si % JOB_COLORS_UV.length]);
+          segs.push({
+            key: `${jid}-${run.weekIndex}-${run.startCol}`, jobId: jid, title: ji.title, type: ji.type,
+            totalQty: ji.totalQty, color: col, isDraft: ji.isDraft, isFirst: run === runs[0], isLast: run === runs[runs.length - 1],
+            weekIndex: run.weekIndex, startCol: run.startCol, endCol: run.endCol, rowIndex: ri,
           });
         }
-        segIdx++;
+        si++;
       }
-
-      return segments;
+      return segs;
     });
 
-    // ─── SEGMENT POSITIONING ───
-    const JOB_BAR_HEIGHT = 20;
-    const JOB_BAR_GAP = 2;
-    const DAY_HEADER_HEIGHT = 24;
-
     const jobsLayerStyle = computed(() => ({
-      display: 'grid',
-      gridTemplateColumns: 'repeat(7, 1fr)',
+      display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
       gridTemplateRows: `repeat(${Math.max(1, Math.ceil(calendarDays.value.length / 7))}, 1fr)`,
     }));
-
     function segmentStyle(seg) {
       return {
-        gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
-        gridRow: `${seg.weekIndex + 1}`,
-        marginTop: `${DAY_HEADER_HEIGHT + seg.rowIndex * (JOB_BAR_HEIGHT + JOB_BAR_GAP)}px`,
-        height: `${JOB_BAR_HEIGHT}px`,
-        backgroundColor: seg.color,
+        gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`, gridRow: `${seg.weekIndex + 1}`,
+        marginTop: `${24 + seg.rowIndex * 22}px`, height: '20px', backgroundColor: seg.color,
         borderRadius: `${seg.isFirst ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isLast ? '3px' : '0'} ${seg.isFirst ? '3px' : '0'}`,
       };
     }
 
     // ─── NAVIGATION ───
-    function prevMonth() {
-      if (currentMonth.value === 0) { currentMonth.value = 11; currentYear.value--; }
-      else currentMonth.value--;
-      emitMonthChange();
-    }
-    function nextMonth() {
-      if (currentMonth.value === 11) { currentMonth.value = 0; currentYear.value++; }
-      else currentMonth.value++;
-      emitMonthChange();
-    }
-    function prevYear() { currentYear.value--; emitMonthChange(); }
-    function nextYear() { currentYear.value++; emitMonthChange(); }
-    function goToday() {
-      const n = new Date();
-      currentMonth.value = n.getMonth();
-      currentYear.value = n.getFullYear();
-      emitMonthChange();
-    }
-    function emitMonthChange() {
-      emit('trigger-event', {
-        name: 'onMonthChange',
-        event: { value: { year: currentYear.value, month: currentMonth.value + 1 } },
-      });
-    }
+    function prevMonth() { if (currentMonth.value === 0) { currentMonth.value = 11; currentYear.value--; } else currentMonth.value--; emitMC(); }
+    function nextMonth() { if (currentMonth.value === 11) { currentMonth.value = 0; currentYear.value++; } else currentMonth.value++; emitMC(); }
+    function prevYear() { currentYear.value--; emitMC(); }
+    function nextYear() { currentYear.value++; emitMC(); }
+    function goToday() { const n = new Date(); currentMonth.value = n.getMonth(); currentYear.value = n.getFullYear(); emitMC(); }
+    function emitMC() { emit('trigger-event', { name: 'onMonthChange', event: { value: { year: currentYear.value, month: currentMonth.value + 1 } } }); }
 
-    // ─── JOB SELECTION ───
-    const selectedJobData = computed(() => {
-      if (!selectedJobId.value) return null;
-      return resolvedJobs.value.find(j => j.id === selectedJobId.value) || null;
+    // ─── JOB SELECTION & STAGE ───
+    const selectedJobData = computed(() => selectedJobId.value ? resolvedJobs.value.find(j => j.id === selectedJobId.value) || null : null);
+    const selectedBdBatch = computed(() => selectedJobData.value?.bd_number ? bdBatches.value[selectedJobData.value.bd_number] || null : null);
+
+    // Stage index = current stage needing action. Matches STAGES array (0-5), 6 = all done.
+    // 0=Created, 1=Connect BD, 2=Set Arrival, 3=Started, 4=Mark Complete, 5=Checkout
+    const jobStageIndex = computed(() => {
+      const j = selectedJobData.value;
+      if (!j) return -1;
+      if (j.checkout_date) return 6;
+      if (j.completed_at || (j.endDate && todayStr > j.endDate)) return 5;
+      if (j.arrival_date) {
+        // Arrived: show "Started" stage (3) if not yet past end, "Complete" stage (4) if auto-completable
+        return (j.endDate && todayStr > j.endDate) ? 4 : 3;
+      }
+      if (j.bd_number) return 2;
+      return 1;
     });
 
-    // Selected job's BD batch details
-    const selectedBdBatch = computed(() => {
-      if (!selectedJobData.value?.bd_number) return null;
-      return bdBatches.value[selectedJobData.value.bd_number] || null;
+    const jobHasStarted = computed(() => {
+      const j = selectedJobData.value;
+      return j?.startDate && todayStr >= j.startDate;
+    });
+    const jobAutoCompleted = computed(() => {
+      const j = selectedJobData.value;
+      return j?.endDate && todayStr > j.endDate && !j.completed_at;
     });
 
     function selectJob(jobId, isDraft) {
       if (isDraft) return;
       selectedJobId.value = jobId;
       activeTab.value = 'manage';
+      isRescheduling.value = false;
+      editMode.value = false;
       emit('trigger-event', { name: 'onJobSelect', event: { value: { jobId } } });
     }
 
@@ -952,9 +822,41 @@ export default {
       selectedJobId.value = null;
     }
 
+    // ─── EDIT MODE ───
+    const editMode = ref(false);
+    const editForm = reactive({ title: '', type: 'uv', quantity: 0, startDate: '', endDate: '', arrival_date: '', checkout_date: '' });
+
+    function enterEditMode() {
+      const j = selectedJobData.value;
+      if (!j) return;
+      Object.assign(editForm, {
+        title: j.title || '', type: j.type || 'uv', quantity: Number(j.quantity) || 0,
+        startDate: j.startDate || '', endDate: j.endDate || '',
+        arrival_date: j.arrival_date || '', checkout_date: j.checkout_date || '',
+      });
+      editMode.value = true;
+    }
+    function cancelEditMode() { editMode.value = false; }
+    function saveEditMode() {
+      const changes = {};
+      const j = selectedJobData.value;
+      if (editForm.title !== j.title) changes.title = editForm.title;
+      if (editForm.type !== j.type) changes.type = editForm.type;
+      if (editForm.quantity !== Number(j.quantity)) changes.quantity = editForm.quantity;
+      if (editForm.startDate !== (j.startDate || '')) changes.startDate = editForm.startDate;
+      if (editForm.endDate !== (j.endDate || '')) changes.endDate = editForm.endDate;
+      if (editForm.arrival_date !== (j.arrival_date || '')) changes.arrival_date = editForm.arrival_date;
+      if (editForm.checkout_date !== (j.checkout_date || '')) changes.checkout_date = editForm.checkout_date;
+      if (Object.keys(changes).length) {
+        emit('trigger-event', { name: 'onJobUpdate', event: { value: { jobId: selectedJobId.value, changes } } });
+      }
+      editMode.value = false;
+    }
+
     // ─── TAB SWITCHING ───
     function switchTab(key) {
       activeTab.value = key;
+      isRescheduling.value = false;
       if (key === 'new' && !draftJob.startDate) {
         let d = new Date();
         while (isWeekend(d)) d = nextDay(d);
@@ -962,215 +864,123 @@ export default {
       }
     }
 
-    // ─── DRAFT JOB METHODS ───
+    // ─── DRAFT METHODS ───
     function cancelDraft() {
-      Object.assign(draftJob, { title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0, bd_number: '' });
-      bdSearch.value = '';
+      Object.assign(draftJob, { title: '', type: 'uv', quantity: 100, startDate: '', _maxDays: 0, bd_number: '', pic_id: '' });
+      bdSearch.value = ''; picSearch.value = '';
       activeTab.value = 'manage';
     }
-
     function submitDraft() {
       if (!canSubmitDraft.value) return;
       const endDate = draftEndDateRaw.value;
-      const dailyAllocation = [];
-      const allocMap = allAllocations.value;
-      for (const ds in allocMap) {
-        const jobAlloc = (allocMap[ds] || []).find(a => a.jobId === '__draft__');
-        if (jobAlloc) {
-          dailyAllocation.push({ date: ds, quantity: jobAlloc.qty });
-        }
-      }
-      dailyAllocation.sort((a, b) => a.date.localeCompare(b.date));
-
+      const da = [];
+      const am = allAllocations.value;
+      for (const ds in am) { const a = (am[ds] || []).find(x => x.jobId === '__draft__'); if (a) da.push({ date: ds, quantity: a.qty }); }
+      da.sort((a, b) => a.date.localeCompare(b.date));
       emit('trigger-event', {
         name: 'onJobCreate',
-        event: {
-          value: {
-            title: draftJob.title,
-            type: draftJob.type,
-            quantity: draftJob.quantity,
-            startDate: draftJob.startDate,
-            endDate,
-            dailyAllocation,
-            bd_number: draftJob.bd_number || '',
-          },
-        },
+        event: { value: { title: draftJob.title, type: draftJob.type, quantity: draftJob.quantity, startDate: draftJob.startDate, endDate, dailyAllocation: da, bd_number: draftJob.bd_number || '', pic_id: draftJob.pic_id || '' } },
       });
-
-      // If BD was connected, also emit the connect event
       if (draftJob.bd_number) {
         const opt = bdOptions.value.find(o => o.bd_number === draftJob.bd_number);
-        if (opt) {
-          emit('trigger-event', {
-            name: 'onJobConnectBd',
-            event: {
-              value: {
-                jobId: null, // Will be set after creation on backend
-                bd_number: draftJob.bd_number,
-                batch_key: opt.batch_key,
-                line_ids: opt.line_ids,
-              },
-            },
-          });
-        }
+        if (opt) emit('trigger-event', { name: 'onJobConnectBd', event: { value: { jobId: null, bd_number: draftJob.bd_number, batch_key: opt.batch_key, line_ids: opt.line_ids } } });
       }
-
       cancelDraft();
     }
 
     // ─── DRAG & DROP ───
-    const dragState = reactive({
-      active: false,
-      mode: null,
-      origStartDate: '',
-      origMaxDays: 0,
-    });
+    const dragState = reactive({ active: false, mode: null });
 
     function handleJobMousedown(event, seg) {
       if (!seg.isDraft) return;
-      dragState.active = true;
-      dragState.mode = 'move';
-      dragState.origStartDate = draftJob.startDate;
+      dragState.active = true; dragState.mode = 'move';
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragEnd);
       event.preventDefault();
     }
-
-    function handleResizeStart(event, direction) {
-      dragState.active = true;
-      dragState.mode = direction === 'left' ? 'resize-left' : 'resize-right';
-      dragState.origStartDate = draftJob.startDate;
-      dragState.origMaxDays = draftJob._maxDays;
+    function handleResizeStart(event, dir) {
+      dragState.active = true; dragState.mode = dir === 'left' ? 'resize-left' : 'resize-right';
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragEnd);
       event.preventDefault();
     }
-
     function handleDayHover() {}
-
     function handleDayMousedown(event, day) {
-      if (!isDrafting.value) return;
       if (day.isWeekend || day.outside) return;
-      draftJob.startDate = day.dateStr;
+      if (isDrafting.value) draftJob.startDate = day.dateStr;
+      else if (isRescheduling.value) rescheduleJob.startDate = day.dateStr;
     }
+
+    // Target for drag: either draftJob or rescheduleJob
+    const dragTarget = computed(() => isRescheduling.value ? rescheduleJob : draftJob);
 
     function onDragMove(event) {
       if (!dragState.active) return;
       const el = document.elementFromPoint(event.clientX, event.clientY);
       if (!el) return;
-      const dayCell = el.closest('.cal-day-cell');
-      if (!dayCell) return;
-      const dateStr = dayCell.dataset.date;
-      if (!dateStr) return;
-      const d = parseDate(dateStr);
+      const dc = el.closest('.cal-day-cell');
+      if (!dc) return;
+      const ds = dc.dataset.date;
+      if (!ds) return;
+      const d = parseDate(ds);
       if (!d || isWeekend(d)) return;
-
-      if (dragState.mode === 'move') {
-        draftJob.startDate = dateStr;
-        draftJob._maxDays = 0;
-      } else if (dragState.mode === 'resize-right') {
-        const start = parseDate(draftJob.startDate);
-        if (dateStr >= draftJob.startDate) {
-          const wd = countWorkdays(start, d);
-          const minDays = computeMinDays(draftJob.quantity, draftJob.type, draftJob.startDate);
-          draftJob._maxDays = Math.max(wd, minDays);
+      const t = dragTarget.value;
+      if (dragState.mode === 'move') { t.startDate = ds; t._maxDays = 0; }
+      else if (dragState.mode === 'resize-right') {
+        const s = parseDate(t.startDate);
+        if (ds >= t.startDate) {
+          const wd = countWorkdays(s, d);
+          const mn = computeMinDays(t.quantity, t.type, t.startDate);
+          t._maxDays = Math.max(wd, mn);
         }
       } else if (dragState.mode === 'resize-left') {
-        if (dateStr <= draftEndDateRaw.value) {
-          draftJob.startDate = dateStr;
-          const end = parseDate(draftEndDateRaw.value);
-          if (end) {
-            const wd = countWorkdays(d, end);
-            const minDays = computeMinDays(draftJob.quantity, draftJob.type, dateStr);
-            draftJob._maxDays = Math.max(wd, minDays);
-          }
+        if (ds <= draftEndDateRaw.value) {
+          t.startDate = ds;
+          const e = parseDate(draftEndDateRaw.value);
+          if (e) { const wd = countWorkdays(d, e); const mn = computeMinDays(t.quantity, t.type, ds); t._maxDays = Math.max(wd, mn); }
         }
       }
     }
-
     function onDragEnd() {
       dragState.active = false;
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
     }
-
-    function computeMinDays(quantity, type, startDate) {
-      let remaining = quantity;
-      let current = parseDate(startDate);
-      if (!current) return 1;
-      let days = 0;
-      let safety = 0;
-      while (remaining > 0 && safety < 3650) {
-        safety++;
-        if (isWeekend(current)) { current = nextDay(current); continue; }
-        const ds = toDateStr(current);
-        const totalCap = getCapacityForDate(ds, type);
-        const used = (baseResult.value.allocMap[ds] || [])
-          .filter(a => a.type === type)
-          .reduce((s, a) => s + a.qty, 0);
-        const available = Math.max(0, totalCap - used);
-        if (available > 0) {
-          remaining -= available;
-          days++;
-        }
-        current = nextDay(current);
+    function computeMinDays(qty, type, sd) {
+      let rem = qty, cur = parseDate(sd), days = 0, sf = 0;
+      if (!cur) return 1;
+      while (rem > 0 && sf < 3650) {
+        sf++;
+        if (isWeekend(cur)) { cur = nextDay(cur); continue; }
+        const ds = toDateStr(cur), tc = getCapacityForDate(ds, type);
+        const used = (baseResult.value.allocMap[ds] || []).filter(a => a.type === type).reduce((s, a) => s + a.qty, 0);
+        const avail = Math.max(0, tc - used);
+        if (avail > 0) { rem -= avail; days++; }
+        cur = nextDay(cur);
       }
       return Math.max(1, days);
     }
-
-    onBeforeUnmount(() => {
-      document.removeEventListener('mousemove', onDragMove);
-      document.removeEventListener('mouseup', onDragEnd);
-    });
+    onBeforeUnmount(() => { document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd); });
 
     // ─── CAPACITY FORM ───
-    const capForm = reactive({
-      title: '',
-      ruleType: 'default',
-      custType: 'uv',
-      quantity: 100,
-      month: '',
-      startDate: '',
-      endDate: '',
-    });
-
+    const capForm = reactive({ title: '', ruleType: 'default', custType: 'uv', quantity: 100, month: '', startDate: '', endDate: '' });
     const canSubmitCapacity = computed(() => {
       if (!capForm.custType || capForm.quantity < 0) return false;
-      if (capForm.ruleType === 'default') return !!capForm.month;
-      return !!(capForm.startDate && capForm.endDate && capForm.startDate <= capForm.endDate);
+      return capForm.ruleType === 'default' ? !!capForm.month : !!(capForm.startDate && capForm.endDate && capForm.startDate <= capForm.endDate);
     });
-
     function submitCapacity() {
       if (!canSubmitCapacity.value) return;
       emit('trigger-event', {
         name: 'onCapacityCreate',
-        event: {
-          value: {
-            title: capForm.title,
-            ruleType: capForm.ruleType,
-            custType: capForm.custType,
-            quantity: capForm.quantity,
-            startDate: capForm.ruleType === 'general' ? capForm.startDate : '',
-            endDate: capForm.ruleType === 'general' ? capForm.endDate : '',
-            month: capForm.ruleType === 'default' ? capForm.month : '',
-          },
-        },
+        event: { value: { title: capForm.title, ruleType: capForm.ruleType, custType: capForm.custType, quantity: capForm.quantity, startDate: capForm.ruleType === 'general' ? capForm.startDate : '', endDate: capForm.ruleType === 'general' ? capForm.endDate : '', month: capForm.ruleType === 'default' ? capForm.month : '' } },
       });
       Object.assign(capForm, { title: '', ruleType: 'default', custType: 'uv', quantity: 100, month: '', startDate: '', endDate: '' });
     }
-
-    function emitCapacityDelete(capacityId) {
-      emit('trigger-event', { name: 'onCapacityDelete', event: { value: { capacityId } } });
-    }
+    function emitCapacityDelete(cid) { emit('trigger-event', { name: 'onCapacityDelete', event: { value: { capacityId: cid } } }); }
 
     // ─── HELPERS ───
-    function formatDateDisplay(str) { return formatDateNice(str); }
-    function statusKey(status) {
-      if (!status) return 'booked';
-      return status.toLowerCase().replace(/\s+/g, '-');
-    }
+    function statusKey(s) { return s ? s.toLowerCase().replace(/\s+/g, '-') : 'booked'; }
 
-    // ─── CSS VARS ───
     const rootCssVars = computed(() => ({
       '--cal-header-bg': props.content?.colorHeaderBg || '#1e293b',
       '--cal-weekend-bg': props.content?.colorWeekendBg || '#f9fafb',
@@ -1181,764 +991,275 @@ export default {
     }));
 
     return {
-      // Constants
-      DOW, TABS,
-      // State
-      currentMonth, currentYear, monthLabel, activeTab, selectedJobId,
-      gridRef,
-      // Calendar
-      calendarDays,
-      // Capacity
-      resolvedCapacity,
-      getCapacityOverrides,
+      DOW, TABS, STAGES,
+      currentMonth, currentYear, monthLabel, activeTab, selectedJobId, gridRef,
+      calendarDays, resolvedCapacity, getCapacityOverrides,
       uvUsed, uvTotal, laserUsed, laserTotal,
-      // Allocations
-      allAllocations, allSegments,
-      // Segments
-      segmentStyle, jobsLayerStyle,
-      // Navigation
+      allAllocations, allSegments, segmentStyle, jobsLayerStyle,
       prevMonth, nextMonth, prevYear, nextYear, goToday,
-      // Selection
-      selectedJobData, selectedBdBatch,
+      selectedJobData, selectedBdBatch, jobStageIndex, jobHasStarted, jobAutoCompleted,
       selectJob, emitJobDelete,
-      // Draft
+      editMode, editForm, enterEditMode, cancelEditMode, saveEditMode,
       draftJob, isDrafting, draftEndDate, draftDaysRequired, canSubmitDraft,
       cancelDraft, submitDraft, switchTab,
-      // BD search
-      bdSearch, bdDropdownOpen, filteredBdOptions, draftBdBatch,
-      selectBdNumber, clearDraftBd, closeBdDropdown,
-      // Drag
-      dragState,
-      handleJobMousedown, handleResizeStart,
-      handleDayHover, handleDayMousedown,
-      // Capacity form
+      isRescheduling, rescheduleJob, rescheduleEndDate, enterReschedule, cancelReschedule, submitReschedule,
+      bdSearch, bdDropdownOpen, filteredBdOptions, draftBdBatch, selectBdNumber, clearDraftBd, closeBdDropdown,
+      picSearch, picDropdownOpen, filteredPicOptions, selectPic, clearDraftPic, closePicDropdown,
+      stageBdSearch, stageBdOpen, filteredStageBdOptions, closeStageBdDropdown, submitStageBd,
+      stageArrivalDate, stageCompleteDate, stageCheckoutDate,
+      submitArrival, submitComplete, submitCheckout,
+      dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
       capForm, canSubmitCapacity, submitCapacity, emitCapacityDelete,
-      // Helpers
-      formatDateDisplay, statusKey,
-      // CSS
-      rootCssVars,
+      fmtDate, statusKey, getTeammateName, rootCssVars,
     };
   },
 };
 </script>
 
 <style lang="scss" scoped>
-// ─── DESIGN TOKENS ───
-$blue: #3b82f6;
-$blue-dark: #2563eb;
-$blue-50: #eff6ff;
-$purple: #7c3aed;
-$purple-50: #f5f3ff;
-$green: #059669;
-$green-50: #ecfdf5;
-$red: #ef4444;
-$red-50: #fef2f2;
-$amber: #f59e0b;
-$amber-50: #fffbeb;
-$gray-900: #111827;
-$gray-800: #1f2937;
-$gray-700: #374151;
-$gray-600: #4b5563;
-$gray-500: #6b7280;
-$gray-400: #9ca3af;
-$gray-300: #d1d5db;
-$gray-200: #e5e7eb;
-$gray-100: #f3f4f6;
-$gray-50: #f9fafb;
-$white: #ffffff;
+$blue: #3b82f6; $blue-dark: #2563eb; $blue-50: #eff6ff;
+$purple: #7c3aed; $purple-50: #f5f3ff;
+$green: #059669; $green-50: #ecfdf5;
+$red: #ef4444; $red-50: #fef2f2;
+$amber: #f59e0b; $amber-50: #fffbeb;
+$gray-900: #111827; $gray-800: #1f2937; $gray-700: #374151; $gray-600: #4b5563;
+$gray-500: #6b7280; $gray-400: #9ca3af; $gray-300: #d1d5db; $gray-200: #e5e7eb;
+$gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
-// ─── ROOT ───
 .prod-cal {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 100%;
-  background: $gray-100;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 12px;
-  color: $gray-900;
-  box-sizing: border-box;
-  line-height: 1.4;
+  display: flex; flex-direction: column; width: 100%; min-height: 100%;
+  background: $gray-100; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px; color: $gray-900; box-sizing: border-box; line-height: 1.4;
   *, *::before, *::after { box-sizing: border-box; }
 }
 
 // ─── CALENDAR HEADER ───
-.cal-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  background: var(--cal-header-bg, #1e293b);
-  color: $white;
-  user-select: none;
-}
-.cal-month-label {
-  font-size: 13px;
-  font-weight: 700;
-  min-width: 140px;
-  text-align: center;
-}
+.cal-header { display: flex; align-items: center; gap: 4px; padding: 8px 12px; background: var(--cal-header-bg); color: $white; user-select: none; }
+.cal-month-label { font-size: 13px; font-weight: 700; min-width: 140px; text-align: center; }
 .cal-nav-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: $white;
-  cursor: pointer;
-  border-radius: 3px;
-  transition: background 0.12s;
+  padding: 4px 10px; font-size: 12px; font-weight: 600; font-family: inherit;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: $white;
+  cursor: pointer; border-radius: 3px; transition: background 0.12s;
   &:hover { background: rgba(255,255,255,0.18); }
 }
 .cal-today-btn { margin-left: auto; }
 
-// ─── DAY-OF-WEEK ROW ───
-.cal-dow-row {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: $gray-50;
-  border-bottom: 1px solid var(--cal-border);
-}
-.cal-dow-cell {
-  padding: 5px 8px;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $gray-500;
-  text-align: center;
-}
+// ─── DAY-OF-WEEK ───
+.cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); background: $gray-50; border-bottom: 1px solid var(--cal-border); }
+.cal-dow-cell { padding: 5px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-500; text-align: center; }
 
-// ─── CALENDAR GRID ───
-.cal-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  position: relative;
-  background: $white;
-  flex: 1;
-}
+// ─── GRID ───
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); position: relative; background: $white; flex: 1; }
 .cal-day-cell {
-  min-height: 80px;
-  border-right: 1px solid var(--cal-border);
-  border-bottom: 1px solid var(--cal-border);
-  position: relative;
-  cursor: default;
+  min-height: 80px; border-right: 1px solid var(--cal-border); border-bottom: 1px solid var(--cal-border); position: relative; cursor: default;
   &:nth-child(7n) { border-right: none; }
 }
-.cal-day--outside {
-  opacity: 0.3;
-  pointer-events: none;
-}
-.cal-day--weekend {
-  background: var(--cal-weekend-bg, $gray-50);
-}
-.cal-day--today .cal-day-num {
-  color: var(--cal-accent, $blue);
-  font-weight: 800;
-}
+.cal-day--outside { opacity: 0.3; pointer-events: none; }
+.cal-day--weekend { background: var(--cal-weekend-bg, $gray-50); }
+.cal-day--today .cal-day-num { color: var(--cal-accent); font-weight: 800; }
+.cal-day-header { display: flex; align-items: center; gap: 3px; padding: 2px 5px; border-bottom: 1px solid $gray-100; min-height: 22px; }
+.cal-day-num { font-size: 11px; font-weight: 600; color: $gray-700; }
+.cal-day-month { font-size: 9px; font-weight: 600; color: $gray-400; text-transform: uppercase; }
+.cal-cap-badges { display: flex; gap: 3px; margin-left: auto; }
+.cal-cap-badge { font-size: 7px; font-weight: 700; padding: 1px 3px; border-radius: 2px; white-space: nowrap; }
+.cal-cap--uv { color: var(--cal-uv-color); background: $blue-50; }
+.cal-cap--laser { color: var(--cal-laser-color); background: $purple-50; }
+.cal-cap--over { color: $red; background: $red-50; }
+.cal-cap-overrides { padding: 1px 4px; }
+.cal-cap-override-tag { font-size: 7px; font-weight: 600; color: $amber; background: $amber-50; padding: 0 3px; border-radius: 2px; margin-right: 2px; }
 
-.cal-day-header {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 5px;
-  border-bottom: 1px solid $gray-100;
-  min-height: 22px;
-}
-.cal-day-num {
-  font-size: 11px;
-  font-weight: 600;
-  color: $gray-700;
-}
-.cal-day-month {
-  font-size: 9px;
-  font-weight: 600;
-  color: $gray-400;
-  text-transform: uppercase;
-}
-.cal-cap-badges {
-  display: flex;
-  gap: 3px;
-  margin-left: auto;
-}
-.cal-cap-badge {
-  font-size: 7px;
-  font-weight: 700;
-  padding: 1px 3px;
-  border-radius: 2px;
-  white-space: nowrap;
-}
-.cal-cap--uv {
-  color: var(--cal-uv-color, $blue);
-  background: $blue-50;
-}
-.cal-cap--laser {
-  color: var(--cal-laser-color, $purple);
-  background: $purple-50;
-}
-.cal-cap--over {
-  color: $red;
-  background: $red-50;
-}
-.cal-cap-overrides {
-  padding: 1px 4px;
-}
-.cal-cap-override-tag {
-  font-size: 7px;
-  font-weight: 600;
-  color: $amber;
-  background: $amber-50;
-  padding: 0 3px;
-  border-radius: 2px;
-  margin-right: 2px;
-}
-
-// ─── JOB BARS LAYER ───
-.cal-jobs-layer {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  z-index: 2;
-}
+// ─── JOB BARS ───
+.cal-jobs-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 2; }
 .cal-job-bar {
-  display: flex;
-  align-items: center;
-  padding: 0 5px;
-  font-size: 9px;
-  font-weight: 600;
-  color: $white;
-  pointer-events: all;
-  cursor: pointer;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transition: opacity 0.15s ease, filter 0.15s ease;
-  position: relative;
-  z-index: 3;
-  min-width: 0;
-  &:hover {
-    filter: brightness(1.1);
-    z-index: 10;
-  }
+  display: flex; align-items: center; padding: 0 5px; font-size: 9px; font-weight: 600; color: $white;
+  pointer-events: all; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: opacity 0.15s, filter 0.15s; position: relative; z-index: 3; min-width: 0;
+  &:hover { filter: brightness(1.1); z-index: 10; }
 }
-.cal-job--selected {
-  outline: 2px solid $gray-900;
-  outline-offset: -1px;
-  z-index: 8;
-}
-.cal-job--draft {
-  border: 1.5px dashed rgba(255,255,255,0.7);
-  opacity: 0.9;
-  cursor: grab;
-  &:active { cursor: grabbing; }
-}
-.cal-job--faded {
-  opacity: 0.25;
-  filter: grayscale(0.5);
-}
-.cal-job-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.cal-job-qty {
-  font-size: 8px;
-  opacity: 0.8;
-  margin-left: 4px;
-  flex-shrink: 0;
-}
-
-// ─── RESIZE HANDLES ───
+.cal-job--selected { outline: 2px solid $gray-900; outline-offset: -1px; z-index: 8; }
+.cal-job--draft { border: 1.5px dashed rgba(255,255,255,0.7); opacity: 0.9; cursor: grab; &:active { cursor: grabbing; } }
+.cal-job--faded { opacity: 0.25; filter: grayscale(0.5); }
+.cal-job-title { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-job-qty { font-size: 8px; opacity: 0.8; margin-left: 4px; flex-shrink: 0; }
 .cal-resize-handle {
-  position: absolute;
-  top: 0; bottom: 0;
-  width: 7px;
-  cursor: ew-resize;
-  z-index: 15;
-  &::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 10px;
-    border-radius: 1px;
-    background: rgba(255,255,255,0.6);
-  }
+  position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 15;
+  &::after { content: ''; position: absolute; top: 50%; transform: translateY(-50%); width: 3px; height: 10px; border-radius: 1px; background: rgba(255,255,255,0.6); }
 }
-.cal-resize--left {
-  left: 0;
-  &::after { left: 2px; }
-}
-.cal-resize--right {
-  right: 0;
-  &::after { right: 2px; }
-}
+.cal-resize--left { left: 0; &::after { left: 2px; } }
+.cal-resize--right { right: 0; &::after { right: 2px; } }
 
 // ─── BOTTOM PANEL ───
-.cal-panel {
-  background: $white;
-  border-top: 2px solid $gray-200;
-  min-height: 120px;
-  max-height: 360px;
-  display: flex;
-  flex-direction: column;
-}
-.cal-tab-bar {
-  display: flex;
-  gap: 0;
-  border-bottom: 2px solid $gray-200;
-  background: $gray-50;
-  flex-shrink: 0;
-}
+.cal-panel { background: $white; border-top: 2px solid $gray-200; min-height: 120px; max-height: 400px; display: flex; flex-direction: column; }
+.cal-tab-bar { display: flex; gap: 0; border-bottom: 2px solid $gray-200; background: $gray-50; flex-shrink: 0; }
 .cal-tab {
-  padding: 8px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: inherit;
-  color: $gray-500;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-  &:hover { color: $gray-700; }
+  padding: 8px 16px; font-size: 11px; font-weight: 600; font-family: inherit; color: $gray-500;
+  background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s; &:hover { color: $gray-700; }
 }
-.cal-tab--active {
-  color: var(--cal-accent, $blue);
-  border-bottom-color: var(--cal-accent, $blue);
+.cal-tab--active { color: var(--cal-accent); border-bottom-color: var(--cal-accent); }
+.cal-tab-body { flex: 1; overflow-y: auto; }
+.cal-tab-content { padding: 12px 16px; }
+.cal-empty-tab { padding: 20px; text-align: center; color: $gray-400; font-size: 11px; border: 1px dashed $gray-300; border-radius: 4px; }
+
+// ─── TIMELINE ───
+.tl-track {
+  display: flex; align-items: flex-start; gap: 0; margin-bottom: 12px; padding: 8px 0 4px;
 }
-.cal-tab-body {
-  flex: 1;
-  overflow-y: auto;
+.tl-step {
+  display: flex; align-items: center; flex-direction: column; position: relative; flex: 1; min-width: 0;
+  &:not(:last-child) { flex-direction: row; align-items: flex-start; }
 }
-.cal-tab-content {
-  padding: 12px 16px;
+.tl-dot {
+  width: 12px; height: 12px; border-radius: 50%; background: $gray-300; border: 2px solid $gray-300;
+  flex-shrink: 0; z-index: 2; transition: background 0.2s, border-color 0.2s;
 }
-.cal-empty-tab {
-  padding: 20px;
-  text-align: center;
-  color: $gray-400;
-  font-size: 11px;
-  border: 1px dashed $gray-300;
-  border-radius: 4px;
+.tl-line {
+  flex: 1; height: 2px; background: $gray-300; margin-top: 5px; transition: background 0.2s;
 }
+.tl-line--done { background: $gray-900; }
+.tl-label {
+  position: absolute; top: 16px; left: 0; font-size: 8px; font-weight: 600; color: $gray-400;
+  text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.tl-step--done .tl-dot { background: $gray-900; border-color: $gray-900; }
+.tl-step--active .tl-dot { background: $white; border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 3px rgba($blue, 0.2); }
+.tl-step--active .tl-label { color: var(--cal-accent, $blue); font-weight: 700; }
+
+// ─── STAGE PANEL ───
+.stage-panel { margin-bottom: 10px; }
+.stage-action {
+  padding: 8px 10px; background: $gray-50; border: 1px solid $gray-200; border-radius: 4px; margin-bottom: 6px;
+}
+.stage-action--warn { border-color: $amber; background: $amber-50; }
+.stage-prompt { font-size: 11px; color: $gray-600; display: block; margin-bottom: 6px; }
+.stage-prompt--active { color: $green; font-weight: 600; }
+.stage-prompt--warn { color: darken($amber, 10%); }
+.stage-row { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.stage-warn-msg { font-size: 10px; color: $red; margin: 6px 0; font-style: italic; }
 
 // ─── FORMS ───
-.cal-form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-}
-.cal-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-}
-.edit-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.edit-field--wide {
-  grid-column: 1 / -1;
-}
-.edit-label {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: $gray-400;
-}
-.edit-value {
-  font-size: 12px;
-  font-weight: 500;
-  color: $gray-800;
-}
+.cal-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.cal-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.edit-field { display: flex; flex-direction: column; gap: 2px; }
+.edit-field--wide { grid-column: 1 / -1; }
+.edit-field--compact { min-width: 120px; }
+.edit-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; }
+.edit-value { font-size: 12px; font-weight: 500; color: $gray-800; }
 .edit-input {
-  padding: 4px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  border: 1px solid $gray-300;
-  border-radius: 3px;
-  outline: none;
-  color: $gray-900;
-  background: $white;
-  &:focus { border-color: var(--cal-accent, $blue); box-shadow: 0 0 0 1px var(--cal-accent, $blue); }
+  padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
+  outline: none; color: $gray-900; background: $white;
+  &:focus { border-color: var(--cal-accent); box-shadow: 0 0 0 1px var(--cal-accent); }
   &::placeholder { color: $gray-400; }
 }
 .edit-select {
-  padding: 4px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  border: 1px solid $gray-300;
-  border-radius: 3px;
-  outline: none;
-  color: $gray-900;
-  background: $white;
-  cursor: pointer;
-  &:focus { border-color: var(--cal-accent, $blue); }
+  padding: 4px 8px; font-size: 11px; font-family: inherit; border: 1px solid $gray-300; border-radius: 3px;
+  outline: none; color: $gray-900; background: $white; cursor: pointer;
+  &:focus { border-color: var(--cal-accent); }
 }
-
-.cal-computed-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: $green;
-  padding: 4px 0;
-}
-.cal-draft-hint {
-  font-size: 10px;
-  color: $gray-400;
-  margin-top: 6px;
-  font-style: italic;
-}
-
-.cal-form-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-  justify-content: flex-end;
-}
+.cal-computed-value { font-size: 12px; font-weight: 700; color: $green; padding: 4px 0; }
+.cal-draft-hint { font-size: 10px; color: $gray-400; margin-top: 6px; font-style: italic; }
+.cal-form-actions { display: flex; gap: 6px; margin-top: 10px; justify-content: flex-end; }
 
 // ─── BUTTONS ───
 .btn-action {
-  padding: 5px 14px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: inherit;
-  border: 1px solid $gray-300;
-  border-radius: 3px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
+  padding: 5px 14px; font-size: 11px; font-weight: 600; font-family: inherit;
+  border: 1px solid $gray-300; border-radius: 3px; cursor: pointer; transition: background 0.12s, color 0.12s;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
-.btn-action--primary {
-  background: $gray-800;
-  color: $white;
-  border-color: $gray-800;
-  &:hover:not(:disabled) { background: $gray-900; }
-}
-.btn-action--submit {
-  background: $green;
-  color: $white;
-  border-color: $green;
-  &:hover:not(:disabled) { background: darken($green, 5%); }
-}
-.btn-action--muted {
-  background: $gray-100;
-  color: $gray-600;
-  border-color: $gray-200;
-  &:hover:not(:disabled) { background: $gray-200; }
-}
-.btn-action--danger {
-  background: $red-50;
-  color: $red;
-  border-color: transparent;
-  &:hover:not(:disabled) { background: $red; color: $white; }
-}
+.btn-action--primary { background: $gray-800; color: $white; border-color: $gray-800; &:hover:not(:disabled) { background: $gray-900; } }
+.btn-action--submit { background: $green; color: $white; border-color: $green; &:hover:not(:disabled) { background: darken($green, 5%); } }
+.btn-action--muted { background: $gray-100; color: $gray-600; border-color: $gray-200; &:hover:not(:disabled) { background: $gray-200; } }
+.btn-action--danger { background: $red-50; color: $red; border-color: transparent; &:hover:not(:disabled) { background: $red; color: $white; } }
+.btn-sm { padding: 3px 10px; font-size: 10px; }
 .btn-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  background: none;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-  color: $gray-400;
-  transition: background 0.1s, color 0.1s;
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  background: none; border: none; border-radius: 3px; cursor: pointer; font-size: 14px; font-weight: 700;
+  color: $gray-400; transition: background 0.1s, color 0.1s;
   &:hover { background: $gray-100; color: $gray-600; }
 }
-.btn-icon--danger {
-  &:hover { background: $red-50; color: $red; }
-}
+.btn-icon--danger { &:hover { background: $red-50; color: $red; } }
 
 // ─── TYPE TAGS ───
-.type-tag {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-.type-tag--uv {
-  color: var(--cal-uv-color, $blue);
-  background: $blue-50;
-}
-.type-tag--laser {
-  color: var(--cal-laser-color, $purple);
-  background: $purple-50;
-}
+.type-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.type-tag--uv { color: var(--cal-uv-color); background: $blue-50; }
+.type-tag--laser { color: var(--cal-laser-color); background: $purple-50; }
 
 // ─── SECTION HEADING ───
 .section-heading {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $gray-400;
-  margin: 12px 0 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: $gray-400; margin: 12px 0 6px;
+  display: flex; align-items: center; gap: 6px;
 }
+.detail-heading { margin-top: 0; }
 .cap-list-heading { margin-top: 16px; }
 
-// ─── MILESTONES ───
-.cal-milestones {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.cal-milestone-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.milestone-label {
-  min-width: 110px;
-}
-.milestone-pending {
-  color: $amber;
-  font-style: italic;
-  font-size: 11px;
-}
-
-.cal-detail-actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-}
-
-// ─── BD NUMBER DROPDOWN ───
-.bd-select-wrapper {
-  position: relative;
-}
-.bd-search-input {
-  width: 100%;
-}
+// ─── BD DROPDOWN ───
+.bd-select-wrapper { position: relative; }
+.bd-select-wrapper--inline { min-width: 200px; }
+.bd-search-input { width: 100%; }
 .bd-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: $white;
-  border: 1px solid $gray-300;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 50;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  position: absolute; top: 100%; left: 0; right: 0; background: $white;
+  border: 1px solid $gray-300; border-top: none; border-radius: 0 0 3px 3px;
+  max-height: 180px; overflow-y: auto; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .bd-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.08s;
-  &:hover { background: $gray-50; }
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 11px; cursor: pointer;
+  transition: background 0.08s; &:hover { background: $gray-50; }
 }
-.bd-dropdown-item--selected {
-  background: $blue-50;
-}
-.bd-opt-num {
-  font-weight: 700;
-  color: $gray-800;
-  min-width: 60px;
-}
-.bd-opt-meta {
-  color: $gray-500;
-  font-size: 10px;
-  margin-left: auto;
-}
+.bd-dropdown-item--selected { background: $blue-50; }
+.bd-opt-num { font-weight: 700; color: $gray-800; min-width: 60px; }
+.bd-opt-meta { color: $gray-500; font-size: 10px; margin-left: auto; }
 .bd-selected-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 2px 8px;
-  background: $blue-50;
-  color: $blue;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 3px;
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 8px;
+  background: $blue-50; color: $blue; font-size: 11px; font-weight: 600; border-radius: 3px;
 }
-.bd-clear-btn {
-  background: none;
-  border: none;
-  color: $blue;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  &:hover { color: $red; }
-}
+.bd-clear-btn { background: none; border: none; color: $blue; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0 2px; line-height: 1; &:hover { color: $red; } }
 
 // ─── BD BATCH CARD ───
-.bd-batch-card {
-  background: $white;
-  border: 1px solid $gray-200;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-.bd-batch-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: $gray-50;
-  border-bottom: 1px solid $gray-200;
-  font-size: 11px;
-}
-.bd-batch-opid {
-  font-weight: 700;
-  color: $gray-800;
-  background: $gray-200;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-}
-.bd-batch-title {
-  font-weight: 500;
-  color: $gray-700;
-  flex: 1;
-}
-.bd-batch-table-scroll {
-  overflow-x: auto;
-}
+.bd-batch-card { background: $white; border: 1px solid $gray-200; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+.bd-batch-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: $gray-50; border-bottom: 1px solid $gray-200; font-size: 11px; }
+.bd-batch-opid { font-weight: 700; color: $gray-800; background: $gray-200; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+.bd-batch-title { font-weight: 500; color: $gray-700; flex: 1; }
+.bd-batch-table-scroll { overflow-x: auto; }
 .bd-batch-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  th {
-    padding: 4px 8px;
-    text-align: left;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: $gray-400;
-    background: $gray-50;
-    border-bottom: 1px solid $gray-200;
-    white-space: nowrap;
-  }
-  td {
-    padding: 4px 8px;
-    border-bottom: 1px solid $gray-100;
-    color: $gray-700;
-    white-space: nowrap;
-  }
-  tr:last-child td {
-    border-bottom: none;
-  }
+  width: 100%; border-collapse: collapse; font-size: 11px;
+  th { padding: 4px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; background: $gray-50; border-bottom: 1px solid $gray-200; white-space: nowrap; }
+  td { padding: 4px 8px; border-bottom: 1px solid $gray-100; color: $gray-700; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
 }
-.td-sku {
-  font-weight: 600;
-  font-family: monospace;
-  font-size: 10px;
-  color: $gray-800;
-}
-.td-qty {
-  font-weight: 600;
-  text-align: center;
-}
-.td-empty {
-  color: $gray-300;
-}
+.td-sku { font-weight: 600; font-family: monospace; font-size: 10px; color: $gray-800; }
+.td-qty { font-weight: 600; text-align: center; }
+.td-empty { color: $gray-300; }
 
 // ─── STATUS PILLS ───
-.status-pill {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.pill--booked {
-  color: $blue;
-  background: $blue-50;
-}
-.pill--issue-raised {
-  color: $red;
-  background: $red-50;
-}
-.pill--processing {
-  color: $amber;
-  background: $amber-50;
-}
-.pill--delivered {
-  color: $green;
-  background: $green-50;
-}
+.status-pill { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.pill--booked { color: $blue; background: $blue-50; }
+.pill--issue-raised { color: $red; background: $red-50; }
+.pill--processing { color: $amber; background: $amber-50; }
+.pill--delivered { color: $green; background: $green-50; }
+.mockup-link { color: $blue; font-size: 10px; font-weight: 600; text-decoration: none; &:hover { text-decoration: underline; } }
 
-// ─── MOCKUP LINK ───
-.mockup-link {
-  color: $blue;
-  font-size: 10px;
-  font-weight: 600;
-  text-decoration: none;
-  &:hover { text-decoration: underline; }
-}
+// ─── MILESTONES ───
+.cal-milestones { display: flex; flex-direction: column; gap: 4px; }
+.cal-milestone-row { display: flex; align-items: center; gap: 8px; }
+.milestone-label { min-width: 110px; }
+.milestone-pending { color: $amber; font-style: italic; font-size: 11px; }
+.cal-detail-actions { margin-top: 12px; display: flex; gap: 8px; }
 
 // ─── CAPACITY LIST ───
-.cal-cap-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.cal-cap-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  background: $gray-50;
-  border: 1px solid $gray-200;
-  border-radius: 3px;
-  font-size: 11px;
-}
-.cal-cap-title {
-  font-weight: 600;
-  color: $gray-800;
-}
-.cal-cap-type-tag {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 2px;
-}
-.cal-cap-meta {
-  color: $gray-500;
-  flex: 1;
-}
-.cal-cap-qty {
-  font-weight: 600;
-  color: $gray-700;
-}
+.cal-cap-list { display: flex; flex-direction: column; gap: 3px; }
+.cal-cap-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: $gray-50; border: 1px solid $gray-200; border-radius: 3px; font-size: 11px; }
+.cal-cap-title { font-weight: 600; color: $gray-800; }
+.cal-cap-type-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 2px; }
+.cal-cap-meta { color: $gray-500; flex: 1; }
+.cal-cap-qty { font-weight: 600; color: $gray-700; }
 
 // ─── RESPONSIVE ───
-@media (max-width: 900px) {
-  .cal-form-grid, .cal-detail-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
+@media (max-width: 900px) { .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) {
-  .cal-form-grid, .cal-detail-grid {
-    grid-template-columns: 1fr;
-  }
+  .cal-form-grid, .cal-detail-grid { grid-template-columns: 1fr; }
   .cal-cap-badge { font-size: 6px; }
   .cal-header { padding: 6px 8px; }
   .cal-day-cell { min-height: 60px; }
+  .tl-label { font-size: 7px; }
 }
 </style>
