@@ -839,7 +839,7 @@ export default {
     // watches moved after activeStageIdx definition
 
     const stageArrivalDate = ref('');
-    const stageCheckoutDate = ref('');
+    const stageCheckoutDate = ref(todayStr);
 
     function submitArrival() {
       if (!stageArrivalDate.value) return;
@@ -920,7 +920,7 @@ export default {
     function submitCheckout() {
       if (!stageCheckoutDate.value) return;
       emit('trigger-event', { name: 'onJobCheckout', event: { value: { jobId: selectedJobId.value, checkout_date: stageCheckoutDate.value } } });
-      stageCheckoutDate.value = ''; stageEditing.value = null;
+      stageCheckoutDate.value = todayStr; stageEditing.value = null;
     }
 
     // ─── RESCHEDULE ───
