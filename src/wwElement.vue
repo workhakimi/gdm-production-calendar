@@ -922,12 +922,30 @@ export default {
       if (!rescheduleJob.startDate) return;
       const endDate = draftEndDateRaw.value;
       const j = selectedJobData.value;
+      // Shift delay end date by the same offset as end date change
+      let delayEnd = j?.endDate_delay || null;
+      let delayReason = j?.delay_reason || null;
+      if (delayEnd && endDate && j?.endDate) {
+        const oldEnd = parseDate((j.endDate || '').split('T')[0]);
+        const newEnd = parseDate((endDate || '').split('T')[0]);
+        if (oldEnd && newEnd) {
+          const diffMs = newEnd.getTime() - oldEnd.getTime();
+          if (diffMs !== 0) {
+            const oldDelay = parseDate((delayEnd || '').split('T')[0]);
+            if (oldDelay) {
+              const shifted = new Date(oldDelay.getTime() + diffMs);
+              delayEnd = toDateStr(shifted);
+            }
+          }
+        }
+      }
       emit('trigger-event', {
         name: 'onJobUpdate',
         event: { value: {
           jobId: selectedJobId.value,
           title: j?.title || null, type: j?.type || 'uv', quantity: Number(j?.quantity) || 0,
           startDate: rescheduleJob.startDate || null, endDate: endDate || null,
+          endDate_delay: delayEnd, delay_reason: delayReason,
           bd_number: j?.bd_number || null, pic_id: j?.pic_id || null,
           arrival_date: j?.arrival_date || null,
           checkout_date: j?.checkout_date || null,
@@ -1306,12 +1324,30 @@ export default {
       const ed = (editStartDateChanged.value || qtyChanged || typeChanged)
         ? (editPreviewEndDate.value || editForm.endDate || null)
         : (j.endDate || null);
+      // Shift delay end date by the same offset as end date change
+      let delayEnd = j.endDate_delay || null;
+      let delayReason = j.delay_reason || null;
+      if (delayEnd && ed && j.endDate) {
+        const oldEnd = parseDate((j.endDate || '').split('T')[0]);
+        const newEnd = parseDate((ed || '').split('T')[0]);
+        if (oldEnd && newEnd) {
+          const diffMs = newEnd.getTime() - oldEnd.getTime();
+          if (diffMs !== 0) {
+            const oldDelay = parseDate((delayEnd || '').split('T')[0]);
+            if (oldDelay) {
+              const shifted = new Date(oldDelay.getTime() + diffMs);
+              delayEnd = toDateStr(shifted);
+            }
+          }
+        }
+      }
       emit('trigger-event', {
         name: 'onJobUpdate',
         event: { value: {
           jobId: selectedJobId.value,
           title: editForm.title || null, type: editForm.type || 'uv', quantity: editForm.quantity,
           startDate: sd, endDate: ed,
+          endDate_delay: delayEnd, delay_reason: delayReason,
           bd_number: j.bd_number || null, pic_id: j.pic_id || null,
           arrival_date: editForm.arrival_date || null,
           checkout_date: editForm.checkout_date || null,
