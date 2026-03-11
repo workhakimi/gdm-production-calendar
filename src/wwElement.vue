@@ -305,7 +305,13 @@
               </div>
               <div class="detail-row">
                 <div class="detail-cell"><span class="edit-label">Start Date</span><span class="edit-value">{{ fmtDate(selectedJobData.startDate) }}</span></div>
-                <div class="detail-cell"><span class="edit-label">End Date</span><span class="edit-value">{{ fmtDate(selectedJobData.endDate) }}</span></div>
+                <div class="detail-cell">
+                  <span class="edit-label">End Date</span>
+                  <span class="edit-value">
+                    <span>Booking: {{ fmtDate((selectedJobData.endDate || '').split('T')[0]) }}</span>
+                    <span v-if="selectedJobData.endDate_delay" class="edit-value--delay">Delay: {{ fmtDate((selectedJobData.endDate_delay || '').split('T')[0]) }}</span>
+                  </span>
+                </div>
                 <div class="detail-cell"><span class="edit-label">BD Number</span><span class="edit-value">{{ selectedJobData.bd_number || '–' }}</span></div>
                 <div class="detail-cell"><span class="edit-label">Created</span><span class="edit-value">{{ fmtDate(selectedJobData.created_at) || '–' }}</span></div>
               </div>
@@ -323,7 +329,13 @@
               </div>
               <div class="detail-row">
                 <div class="detail-cell"><label class="edit-label">Start Date</label><input class="edit-input" type="date" v-model="editForm.startDate" /></div>
-                <div class="detail-cell"><label class="edit-label">End Date</label><input v-if="canEditEndDate" class="edit-input" type="date" v-model="editForm.endDate" /><span v-else class="edit-value edit-value--computed">{{ fmtDate(editPreviewEndDate || editForm.endDate) }}</span></div>
+                <div class="detail-cell">
+                  <label class="edit-label">End Date</label>
+                  <span class="edit-value edit-value--computed">
+                    <span>Booking: {{ fmtDate((editPreviewEndDate || editForm.endDate || '').split('T')[0]) }}</span>
+                    <span v-if="selectedJobData.endDate_delay" class="edit-value--delay">Delay: {{ fmtDate((selectedJobData.endDate_delay || '').split('T')[0]) }}</span>
+                  </span>
+                </div>
                 <div class="detail-cell"><label class="edit-label">Arrival Date</label><input class="edit-input" type="date" v-model="editForm.arrival_date" /></div>
                 <div class="detail-cell"><label class="edit-label">Checkout Date</label><input class="edit-input" type="date" v-model="editForm.checkout_date" /></div>
               </div>
@@ -1731,9 +1743,10 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .edit-field--wide { grid-column: 1 / -1; }
 .edit-field--compact { min-width: 120px; }
 .edit-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; }
-.edit-value { font-size: 12px; font-weight: 500; color: $gray-800; }
+.edit-value { font-size: 12px; font-weight: 500; color: $gray-800; display: flex; flex-direction: column; gap: 1px; }
 .edit-hint { font-size: 9px; color: $gray-400; font-weight: 400; font-style: italic; }
-.edit-value--computed { color: $green; font-weight: 700; }
+.edit-value--computed { color: $green; font-weight: 700; display: flex; flex-direction: column; gap: 1px; }
+.edit-value--delay { color: $red; font-weight: 600; font-size: 11px; }
 .edit-drag-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-top: 6px; }
 .edit-warn-msg { font-size: 10px; color: $red; font-style: italic; margin-top: 4px; }
 .bd-warn { font-size: 11px; color: $amber; background: $amber-50; border: 1px solid $amber; border-radius: 3px; padding: 6px 10px; margin-top: 8px; }
