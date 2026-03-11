@@ -1277,8 +1277,8 @@ export default {
           const ep = j?.endDate ? j.endDate.split('T')[0] : '';
           const dp = j?.endDate_delay ? j.endDate_delay.split('T')[0] : '';
           const effectiveEnd = dp || ep;
-          if (j?.endDate && j.endDate.includes('T')) return 'Completed';
-          if (effectiveEnd && todayStr > effectiveEnd) return 'Completed';
+          if (j?.endDate && j.endDate.includes('T')) return 'Job Ended';
+          if (effectiveEnd && todayStr > effectiveEnd) return 'Job Ended';
           if (j?.endDate_delay) return 'Pending Completion';
           return 'Pending Completion';
         }
