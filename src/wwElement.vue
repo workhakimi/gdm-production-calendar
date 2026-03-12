@@ -690,8 +690,30 @@ export default {
 
     function getTeammateName(id) { return teammateLookup.value[id]?.name || ''; }
 
+    // ─── CUSTOMIZATION SKU REFERENCE ───
+    const CUST_SKU_MAP = {
+      'UV-ICON':        { type: 'uv',       subtype: 'UV 1 LOGO' },
+      'UV-ICON-2':      { type: 'uv',       subtype: 'UV 2 LOGO' },
+      'UV-360':         { type: 'uv',       subtype: 'UV 360' },
+      'EGV-ICON':       { type: 'laser',    subtype: 'Laser (1 Logo)' },
+      'EGV-ICON-LARGE': { type: 'laser',    subtype: 'Laser (1 Large Logo)' },
+      'EGV-ICON-2':     { type: 'laser',    subtype: 'Laser (2 Logos)' },
+      'EGV-TEXT':       { type: 'laser',    subtype: 'Laser (Name only)' },
+      'EGV-SET':        { type: 'laser',    subtype: 'Laser (1 Logo & 1 Name)' },
+      'EGV-SET-2':      { type: 'laser',    subtype: 'Laser (2 Logo & 1 Name)' },
+      'UVEGV-SET':      { type: 'uv+laser', subtype: 'Both UV Laser (1 Logo & 1 Name)' },
+      'UVEGV-SET-2':    { type: 'uv+laser', subtype: 'Both UV Laser (2 Logo & 1 Name)' },
+      'UVEGV-SET-360':  { type: 'uv+laser', subtype: 'Both UV Laser (360 & 1 Name)' },
+    };
+    function custLookup(sku) {
+      if (!sku) return { type: 'uv', subtype: 'None' };
+      return CUST_SKU_MAP[sku.toUpperCase()] || CUST_SKU_MAP[sku] || null;
+    }
+
     // ─── BD BATCHES ───
     function custTypeFromStr(c) {
+      const entry = custLookup(c);
+      if (entry) return entry.type === 'uv+laser' ? 'uv+laser' : entry.type;
       const l = (c || '').toLowerCase();
       return (l.includes('laser') || l.includes('deboss') || l.includes('egv')) ? 'laser' : 'uv';
     }
@@ -709,13 +731,15 @@ export default {
           };
         }
         const ct = custTypeFromStr(line.customization);
-        if (ct === 'laser') bm[bd]._hasLaser = true; else bm[bd]._hasUv = true;
+        if (ct === 'uv+laser') { bm[bd]._hasUv = true; bm[bd]._hasLaser = true; }
+        else if (ct === 'laser') bm[bd]._hasLaser = true;
+        else bm[bd]._hasUv = true;
         bm[bd].line_ids.push(line.id);
         const bi = bookingItemLookup.value[line.bookingitems_headerid];
         const inv = bi ? inventoryLookup.value[bi.sku] : null;
         bm[bd].items.push({
           lineId: line.id, sku: bi?.sku || '–', model: inv?.model || '–', color: inv?.color || '–',
-          imagelink: inv?.imagelink || '', customizationSub: line.customization || '–',
+          imagelink: inv?.imagelink || '', customizationSub: custLookup(line.customization)?.subtype || line.customization || '–',
           qty: line.quantity_assigned || 0, totalQty: bi?.quantity || 0,
           status: bi?.status || 'Booked', mockupLink: line.mockup_link || '',
         });
