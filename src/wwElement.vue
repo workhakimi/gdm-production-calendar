@@ -506,6 +506,68 @@
           </div>
         </div>
 
+        <!-- ═══ SUMMARY ═══ -->
+        <div v-if="activeTab === 'summary'" class="cal-tab-content">
+          <div class="sum-filters">
+            <div class="edit-field edit-field--compact">
+              <label class="edit-label">From</label>
+              <input class="edit-input edit-input--sm" type="date" v-model="sumFrom" />
+            </div>
+            <div class="edit-field edit-field--compact">
+              <label class="edit-label">To</label>
+              <input class="edit-input edit-input--sm" type="date" v-model="sumTo" />
+            </div>
+          </div>
+          <div class="sum-hint">Jobs that started and completed within this timeframe.</div>
+
+          <!-- Section A: Summary -->
+          <div class="sum-section-title">Summary</div>
+          <table class="sum-table">
+            <thead><tr><th>Type</th><th class="sum-col-r">Total Completed</th></tr></thead>
+            <tbody>
+              <tr v-for="row in sumSummaryRows" :key="row.type">
+                <td>{{ row.type }}</td>
+                <td class="sum-col-r sum-mono">{{ row.qty }}</td>
+              </tr>
+              <tr v-if="!sumSummaryRows.length"><td colspan="2" class="sum-empty">No completed jobs in this range.</td></tr>
+            </tbody>
+            <tfoot v-if="sumSummaryRows.length"><tr><td class="sum-foot">Total</td><td class="sum-col-r sum-foot sum-mono">{{ sumTotal }}</td></tr></tfoot>
+          </table>
+
+          <!-- Section B: Breakdown -->
+          <div class="sum-section-title">Breakdown</div>
+          <table class="sum-table">
+            <thead><tr><th>Type</th><th>Subtype</th><th class="sum-col-r">Total Completed</th></tr></thead>
+            <tbody>
+              <tr v-for="(row, i) in sumBreakdownRows" :key="i">
+                <td>{{ row.type }}</td>
+                <td>{{ row.subtype }}</td>
+                <td class="sum-col-r sum-mono">{{ row.qty }}</td>
+              </tr>
+              <tr v-if="!sumBreakdownRows.length"><td colspan="3" class="sum-empty">No data.</td></tr>
+            </tbody>
+            <tfoot v-if="sumBreakdownRows.length"><tr><td class="sum-foot" colspan="2">Total</td><td class="sum-col-r sum-foot sum-mono">{{ sumBreakdownTotal }}</td></tr></tfoot>
+          </table>
+
+          <!-- Section C: Excluded -->
+          <div class="sum-section-title">Not Included</div>
+          <div class="sum-hint">Jobs with dates in this timeframe but not counted in the summary above.</div>
+          <table class="sum-table">
+            <thead><tr><th>Title</th><th>Type</th><th>Qty</th><th>Start</th><th>End</th><th>Reason</th></tr></thead>
+            <tbody>
+              <tr v-for="j in sumExcludedJobs" :key="j.id" class="sum-row--excluded">
+                <td class="sum-title-cell">{{ j.title }}</td>
+                <td><span class="type-tag type-tag--sm" :class="'type-tag--' + (j.type || 'uv')">{{ (j.type || 'uv') === 'laser' ? 'Laser' : 'UV' }}</span></td>
+                <td class="sum-mono">{{ j.quantity }}</td>
+                <td>{{ fmtDate(j.startDate) }}</td>
+                <td>{{ fmtDate(j._effectiveEnd) || '–' }}</td>
+                <td class="sum-reason">{{ j._reason }}</td>
+              </tr>
+              <tr v-if="!sumExcludedJobs.length"><td colspan="6" class="sum-empty">All jobs with dates in this range are included above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <!-- ═══ MANAGE CAPACITY ═══ -->
         <div v-if="activeTab === 'capacity'" class="cal-tab-content">
           <div class="section-heading">Add Capacity Rule</div>
@@ -558,6 +620,7 @@ const TABS = [
   { key: 'manage', label: 'Manage Job' },
   { key: 'new', label: 'New Job' },
   { key: 'bookings', label: 'Bookings List' },
+  { key: 'summary', label: 'Summary' },
   { key: 'capacity', label: 'Manage Capacity' },
 ];
 const STAGES = [
@@ -1686,6 +1749,116 @@ export default {
     }
     function emitCapacityDelete(cid) { emit('trigger-event', { name: 'onCapacityDelete', event: { value: { capacityId: cid } } }); }
 
+    // ─── SUMMARY TAB ───
+    const sumFromDefault = (() => { const d = new Date(now.getFullYear(), now.getMonth(), 1); return toDateStr(d); })();
+    const sumToDefault = (() => { const d = new Date(now.getFullYear(), now.getMonth() + 1, 0); return toDateStr(d); })();
+    const sumFrom = ref(sumFromDefault);
+    const sumTo = ref(sumToDefault);
+
+    function isJobCompleted(j) {
+      if (!j) return false;
+      if (j.checkout_date) return true;
+      const endHasTime = j.endDate && j.endDate.includes('T');
+      if (endHasTime) return true;
+      const endDatePart = j.endDate ? j.endDate.split('T')[0] : '';
+      const delayDatePart = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      const effectiveEnd = delayDatePart || endDatePart;
+      if (effectiveEnd && _todayRef.value > effectiveEnd) return true;
+      return false;
+    }
+
+    function jobEffectiveEnd(j) {
+      const dp = j.endDate_delay ? j.endDate_delay.split('T')[0] : '';
+      const ep = j.endDate ? j.endDate.split('T')[0] : '';
+      return dp || ep || '';
+    }
+
+    // Jobs that started AND completed within the timeframe
+    const sumCompletedJobs = computed(() => {
+      const from = sumFrom.value, to = sumTo.value;
+      return resolvedJobs.value.filter(j => {
+        if (!j.startDate || !from || !to) return false;
+        const sd = j.startDate.split('T')[0];
+        if (sd < from || sd > to) return false;
+        if (!isJobCompleted(j)) return false;
+        const ee = jobEffectiveEnd(j);
+        if (!ee || ee < from || ee > to) return false;
+        return true;
+      });
+    });
+
+    // Summary: group by type
+    const sumSummaryRows = computed(() => {
+      const m = {};
+      for (const j of sumCompletedJobs.value) {
+        const t = (j.type || 'uv').toUpperCase();
+        m[t] = (m[t] || 0) + (Number(j.quantity) || 0);
+      }
+      return Object.entries(m).sort(([a], [b]) => a.localeCompare(b)).map(([type, qty]) => ({ type, qty }));
+    });
+    const sumTotal = computed(() => sumSummaryRows.value.reduce((s, r) => s + r.qty, 0));
+
+    // Breakdown: group by type → customization subtype from BD items
+    const sumBreakdownRows = computed(() => {
+      const rows = [];
+      for (const j of sumCompletedJobs.value) {
+        const batch = j.bd_number ? bdBatches.value[j.bd_number] : null;
+        if (batch && batch.items.length) {
+          for (const item of batch.items) {
+            const custRaw = item.customizationSub || '–';
+            const custLower = custRaw.toLowerCase();
+            let type;
+            if (custLower.includes('uv') && (custLower.includes('laser') || custLower.includes('egv'))) type = 'UV+LASER';
+            else if (custLower.includes('laser') || custLower.includes('egv') || custLower.includes('deboss')) type = 'LASER';
+            else type = 'UV';
+            rows.push({ type, subtype: custRaw, qty: Number(item.qty) || 0 });
+          }
+        } else {
+          rows.push({ type: (j.type || 'uv').toUpperCase(), subtype: '(No BD linked)', qty: Number(j.quantity) || 0 });
+        }
+      }
+      // Aggregate by type+subtype
+      const agg = {};
+      for (const r of rows) {
+        const key = `${r.type}::${r.subtype}`;
+        if (!agg[key]) agg[key] = { type: r.type, subtype: r.subtype, qty: 0 };
+        agg[key].qty += r.qty;
+      }
+      return Object.values(agg).sort((a, b) => a.type.localeCompare(b.type) || a.subtype.localeCompare(b.subtype));
+    });
+    const sumBreakdownTotal = computed(() => sumBreakdownRows.value.reduce((s, r) => s + r.qty, 0));
+
+    // Excluded: jobs that overlap the timeframe but aren't fully completed within it
+    const sumExcludedJobs = computed(() => {
+      const from = sumFrom.value, to = sumTo.value;
+      if (!from || !to) return [];
+      return resolvedJobs.value.filter(j => {
+        if (!j.startDate) return false;
+        const sd = j.startDate.split('T')[0];
+        const ee = jobEffectiveEnd(j);
+        // Must overlap the timeframe
+        const overlaps = (sd <= to) && (!ee || ee >= from || !ee);
+        if (!overlaps && sd > to) return false;
+        if (sd < from && (!ee || ee < from)) return false;
+        // Already included in completed? Skip
+        if (sumCompletedJobs.value.some(c => c.id === j.id)) return false;
+        // Must have some relevance to the period
+        const startsInRange = sd >= from && sd <= to;
+        const endsInRange = ee && ee >= from && ee <= to;
+        if (!startsInRange && !endsInRange) return false;
+        return true;
+      }).map(j => {
+        const sd = j.startDate.split('T')[0];
+        const ee = jobEffectiveEnd(j);
+        let reason;
+        if (!isJobCompleted(j)) reason = 'Not yet completed';
+        else if (sd < from) reason = 'Started before timeframe';
+        else if (ee && ee > to) reason = 'Completed after timeframe';
+        else reason = 'Partially outside timeframe';
+        return { ...j, _reason: reason, _effectiveEnd: ee };
+      });
+    });
+
     // ─── HELPERS ───
     function statusKey(s) { return s ? s.toLowerCase().replace(/\s+/g, '-') : 'booked'; }
 
@@ -1723,6 +1896,7 @@ export default {
       startDelayStretch,
       dragState, handleJobMousedown, handleResizeStart, handleDayHover, handleDayMousedown,
       blFrom, blTo, filteredBookings, getJobStageState,
+      sumFrom, sumTo, sumSummaryRows, sumTotal, sumBreakdownRows, sumBreakdownTotal, sumExcludedJobs,
       capForm, canSubmitCapacity, submitCapacity, emitCapacityDelete,
       fmtDate, statusKey, getTeammateName, rootCssVars,
     };
@@ -2054,6 +2228,24 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .bl-tl--active .bl-tl-dot { background: $blue; border-color: $blue; box-shadow: 0 0 0 2px rgba($blue, 0.15); }
 .bl-tl--current .bl-tl-dot { background: $gray-800; border-color: $gray-800; }
 .bl-tl--pending .bl-tl-dot { background: #fff; border-color: $gray-300; }
+
+// ─── SUMMARY TAB ───
+.sum-filters { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.sum-hint { font-size: 10px; color: $gray-400; font-style: italic; margin-bottom: 8px; }
+.sum-section-title { font-size: 11px; font-weight: 700; color: $gray-800; text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 4px; padding-bottom: 3px; border-bottom: 1px solid $gray-200; }
+.sum-table {
+  width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px;
+  th { padding: 4px 8px; font-size: 9px; font-weight: 700; color: $gray-400; text-transform: uppercase; letter-spacing: 0.04em; text-align: left; border-bottom: 1px solid $gray-200; background: $gray-50; }
+  td { padding: 5px 8px; border-bottom: 1px solid $gray-50; }
+  tr:last-child td { border-bottom: none; }
+}
+.sum-col-r { text-align: right; }
+.sum-mono { font-weight: 600; font-family: monospace; font-size: 11px; }
+.sum-foot { font-weight: 700; color: $gray-800; border-top: 2px solid $gray-200; }
+.sum-empty { color: $gray-400; font-style: italic; text-align: center; padding: 12px 8px; }
+.sum-title-cell { font-weight: 600; color: $gray-800; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sum-reason { color: $amber; font-weight: 600; font-size: 10px; }
+.sum-row--excluded td { background: rgba($amber, 0.03); }
 
 // ─── CAPACITY LIST ───
 .cal-cap-list { display: flex; flex-direction: column; gap: 3px; }
