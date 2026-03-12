@@ -347,25 +347,21 @@
             <template v-if="selectedBdBatch">
               <div class="section-heading">Order Details ({{ selectedJobData.bd_number }})</div>
               <div class="bd-batch-card">
-                <div class="bd-batch-header">
-                  <span class="bd-batch-opid">{{ selectedBdBatch.opid }}</span>
-                  <span class="bd-batch-title">{{ selectedBdBatch.opTitle }}</span>
-                  <span class="bd-batch-cust type-tag" :class="'type-tag--' + (selectedBdBatch.custCategory || 'uv')">{{ selectedBdBatch.customization }}</span>
-                </div>
+                <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ selectedBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
                 <div class="bd-batch-table-scroll">
                   <table class="bd-batch-table">
-                    <thead><tr><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Mockup</th></tr></thead>
+                    <colgroup><col style="width:32px"/><col style="width:110px"/><col style="width:14%"/><col style="width:70px"/><col style="width:65px"/><col style="width:80px"/><col style="width:110px"/><col style="width:70px"/></colgroup>
+                    <thead><tr><th></th><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Customization</th><th>Mockup</th></tr></thead>
                     <tbody>
                       <tr v-for="item in selectedBdBatch.items" :key="item.lineId">
+                        <td class="cell-img"><img v-if="item.imagelink" :src="item.imagelink" class="thumb-sm" /><span v-else class="td-empty">–</span></td>
                         <td class="td-sku">{{ item.sku }}</td>
                         <td>{{ item.model }}</td>
                         <td>{{ item.color }}</td>
-                        <td class="td-qty">{{ item.qty }}</td>
+                        <td class="td-qty">{{ item.qty }}/{{ item.totalQty }}</td>
                         <td><span class="status-pill" :class="'pill--' + statusKey(item.status)">{{ item.status }}</span></td>
-                        <td>
-                          <a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a>
-                          <span v-else class="td-empty">–</span>
-                        </td>
+                        <td>{{ item.customizationSub }}</td>
+                        <td><a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a><span v-else class="td-empty">–</span></td>
                       </tr>
                     </tbody>
                   </table>
@@ -444,19 +440,18 @@
           <template v-if="draftBdBatch">
             <div class="section-heading">BD Preview ({{ draftJob.bd_number }})</div>
             <div class="bd-batch-card">
-              <div class="bd-batch-header">
-                <span class="bd-batch-opid">{{ draftBdBatch.opid }}</span>
-                <span class="bd-batch-title">{{ draftBdBatch.opTitle }}</span>
-                <span class="bd-batch-cust type-tag" :class="'type-tag--' + (draftBdBatch.custCategory || 'uv')">{{ draftBdBatch.customization }}</span>
-              </div>
+              <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ draftBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
               <div class="bd-batch-table-scroll">
                 <table class="bd-batch-table">
-                  <thead><tr><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Mockup</th></tr></thead>
+                  <colgroup><col style="width:32px"/><col style="width:110px"/><col style="width:14%"/><col style="width:70px"/><col style="width:65px"/><col style="width:80px"/><col style="width:110px"/><col style="width:70px"/></colgroup>
+                  <thead><tr><th></th><th>SKU</th><th>Model</th><th>Color</th><th>Qty</th><th>Status</th><th>Customization</th><th>Mockup</th></tr></thead>
                   <tbody>
                     <tr v-for="item in draftBdBatch.items" :key="item.lineId">
+                      <td class="cell-img"><img v-if="item.imagelink" :src="item.imagelink" class="thumb-sm" /><span v-else class="td-empty">–</span></td>
                       <td class="td-sku">{{ item.sku }}</td><td>{{ item.model }}</td><td>{{ item.color }}</td>
-                      <td class="td-qty">{{ item.qty }}</td>
+                      <td class="td-qty">{{ item.qty }}/{{ item.totalQty }}</td>
                       <td><span class="status-pill" :class="'pill--' + statusKey(item.status)">{{ item.status }}</span></td>
+                      <td>{{ item.customizationSub }}</td>
                       <td><a v-if="item.mockupLink" :href="item.mockupLink" target="_blank" class="mockup-link">View</a><span v-else class="td-empty">–</span></td>
                     </tr>
                   </tbody>
@@ -653,7 +648,9 @@ export default {
         const inv = bi ? inventoryLookup.value[bi.sku] : null;
         bm[bd].items.push({
           lineId: line.id, sku: bi?.sku || '–', model: inv?.model || '–', color: inv?.color || '–',
-          qty: line.quantity_assigned || 0, status: bi?.status || 'Booked', mockupLink: line.mockup_link || '',
+          imagelink: inv?.imagelink || '', customizationSub: line.customization || '–',
+          qty: line.quantity_assigned || 0, totalQty: bi?.quantity || 0,
+          status: bi?.status || 'Booked', mockupLink: line.mockup_link || '',
         });
       }
       return bm;
@@ -2002,10 +1999,11 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 
 // ─── BD BATCH CARD ───
 .bd-batch-card { background: $white; border: 1px solid $gray-200; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
-.bd-batch-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: $gray-50; border-bottom: 1px solid $gray-200; font-size: 11px; }
-.bd-batch-opid { font-weight: 700; color: $gray-800; background: $gray-200; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
-.bd-batch-title { font-weight: 500; color: $gray-700; flex: 1; }
+.bd-batch-type-row { padding: 5px 10px; background: $gray-100; border-bottom: 1px solid $gray-200; text-align: right; }
+.bd-batch-type-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; background: #e2e8f0; padding: 2px 8px; border-radius: 3px; }
 .bd-batch-table-scroll { overflow-x: auto; }
+.cell-img { width: 36px; padding: 4px 6px; }
+.thumb-sm { width: 28px; height: 28px; object-fit: cover; display: block; border-radius: 2px; }
 .bd-batch-table {
   width: 100%; border-collapse: collapse; font-size: 11px;
   th { padding: 4px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: $gray-400; background: $gray-50; border-bottom: 1px solid $gray-200; white-space: nowrap; }
