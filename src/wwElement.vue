@@ -137,7 +137,7 @@
                       <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown bd-dropdown--compact">
                         <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="selectStageBd(opt)">
                           <span class="bd-opt-num">{{ opt.bd_number }}</span>
-                          <span class="bd-opt-cust type-tag type-tag--sm" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
+                          <span class="bd-opt-cust type-tag type-tag--sm" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
                           <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                         </div>
                       </div>
@@ -424,7 +424,7 @@
                 <div v-if="bdDropdownOpen && filteredBdOptions.length" class="bd-dropdown">
                   <div v-for="opt in filteredBdOptions" :key="opt.bd_number" class="bd-dropdown-item" :class="{ 'bd-dropdown-item--selected': draftJob.bd_number === opt.bd_number }" @mousedown.prevent="selectBdNumber(opt)">
                     <span class="bd-opt-num">{{ opt.bd_number }}</span>
-                    <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.customization }}</span>
+                    <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
                     <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                   </div>
                 </div>
