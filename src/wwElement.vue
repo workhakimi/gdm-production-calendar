@@ -137,7 +137,7 @@
                       <div v-if="stageBdOpen && filteredStageBdOptions.length" class="bd-dropdown bd-dropdown--compact">
                         <div v-for="opt in filteredStageBdOptions" :key="opt.bd_number" class="bd-dropdown-item" @mousedown.prevent="selectStageBd(opt)">
                           <span class="bd-opt-num">{{ opt.bd_number }}</span>
-                          <span class="bd-opt-cust type-tag type-tag--sm" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
+                          <span class="bd-opt-cust type-tag type-tag--sm" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'uv+laser' ? 'UV+LASER' : opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
                           <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                         </div>
                       </div>
@@ -347,7 +347,7 @@
             <template v-if="selectedBdBatch">
               <div class="section-heading">Order Details ({{ selectedJobData.bd_number }})</div>
               <div class="bd-batch-card">
-                <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ selectedBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
+                <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ selectedBdBatch.custCategory === 'uv+laser' ? 'UV+LASER' : selectedBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
                 <div class="bd-batch-table-scroll">
                   <table class="bd-batch-table">
                     <colgroup><col style="width:32px"/><col style="width:110px"/><col style="width:14%"/><col style="width:70px"/><col style="width:65px"/><col style="width:80px"/><col style="width:110px"/><col style="width:70px"/></colgroup>
@@ -424,7 +424,7 @@
                 <div v-if="bdDropdownOpen && filteredBdOptions.length" class="bd-dropdown">
                   <div v-for="opt in filteredBdOptions" :key="opt.bd_number" class="bd-dropdown-item" :class="{ 'bd-dropdown-item--selected': draftJob.bd_number === opt.bd_number }" @mousedown.prevent="selectBdNumber(opt)">
                     <span class="bd-opt-num">{{ opt.bd_number }}</span>
-                    <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
+                    <span class="bd-opt-cust type-tag" :class="'type-tag--' + opt.custCategory">{{ opt.custCategory === 'uv+laser' ? 'UV+LASER' : opt.custCategory === 'laser' ? 'LASER' : 'UV' }}</span>
                     <span class="bd-opt-meta">{{ opt.opid }} · {{ opt.itemCount }} SKUs</span>
                   </div>
                 </div>
@@ -440,7 +440,7 @@
           <template v-if="draftBdBatch">
             <div class="section-heading">BD Preview ({{ draftJob.bd_number }})</div>
             <div class="bd-batch-card">
-              <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ draftBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
+              <div class="bd-batch-type-row"><span class="bd-batch-type-tag">{{ draftBdBatch.custCategory === 'uv+laser' ? 'UV+LASER' : draftBdBatch.custCategory === 'laser' ? 'LASER' : 'UV' }}</span></div>
               <div class="bd-batch-table-scroll">
                 <table class="bd-batch-table">
                   <colgroup><col style="width:32px"/><col style="width:110px"/><col style="width:14%"/><col style="width:70px"/><col style="width:65px"/><col style="width:80px"/><col style="width:110px"/><col style="width:70px"/></colgroup>
@@ -691,6 +691,10 @@ export default {
     function getTeammateName(id) { return teammateLookup.value[id]?.name || ''; }
 
     // ─── BD BATCHES ───
+    function custTypeFromStr(c) {
+      const l = (c || '').toLowerCase();
+      return (l.includes('laser') || l.includes('deboss') || l.includes('egv')) ? 'laser' : 'uv';
+    }
     const bdBatches = computed(() => {
       const bm = {};
       for (const line of resolvedOpLines.value) {
@@ -698,14 +702,14 @@ export default {
         if (!bd) continue;
         if (!bm[bd]) {
           const h = opHeaderLookup.value[line.headerid];
-          const c = (line.customization || 'None').toLowerCase();
           bm[bd] = {
-            bd_number: bd, customization: line.customization || 'None',
-            custCategory: c.includes('laser') || c.includes('deboss') ? 'laser' : 'uv',
+            bd_number: bd,
             headerid: line.headerid, opid: h?.opid || '–', opTitle: h?.title || '–',
-            line_ids: [], items: [],
+            line_ids: [], items: [], _hasUv: false, _hasLaser: false,
           };
         }
+        const ct = custTypeFromStr(line.customization);
+        if (ct === 'laser') bm[bd]._hasLaser = true; else bm[bd]._hasUv = true;
         bm[bd].line_ids.push(line.id);
         const bi = bookingItemLookup.value[line.bookingitems_headerid];
         const inv = bi ? inventoryLookup.value[bi.sku] : null;
@@ -715,6 +719,14 @@ export default {
           qty: line.quantity_assigned || 0, totalQty: bi?.quantity || 0,
           status: bi?.status || 'Booked', mockupLink: line.mockup_link || '',
         });
+      }
+      // Resolve custCategory from all lines
+      for (const b of Object.values(bm)) {
+        if (b._hasUv && b._hasLaser) b.custCategory = 'uv+laser';
+        else if (b._hasLaser) b.custCategory = 'laser';
+        else b.custCategory = 'uv';
+        b.customization = b.custCategory === 'uv+laser' ? 'UV+Laser' : b.custCategory === 'laser' ? 'Laser' : 'UV';
+        delete b._hasUv; delete b._hasLaser;
       }
       return bm;
     });
@@ -2132,6 +2144,7 @@ $gray-100: #f3f4f6; $gray-50: #f9fafb; $white: #ffffff;
 .type-tag--sm { font-size: 8px; padding: 0 4px; }
 .type-tag--uv { color: var(--cal-uv-color); background: $blue-50; }
 .type-tag--laser { color: var(--cal-laser-color); background: $purple-50; }
+.type-tag--uv\+laser { color: $gray-800; background: $gray-200; }
 
 // ─── SECTION HEADING ───
 .section-heading {
